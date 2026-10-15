@@ -429,7 +429,7 @@ class Allocator:
         Zwei billige Abfragen: die Impulszahl steht als laufende Summe in
         `counters`, der letzte Bilanzzeitstempel ist ein Indexzugriff.
         """
-        stände = self.db.all_states()
+        stände = self.db.all_states(include_retired=True)
         impulse = tuple(sorted(
             (m, s['pulses'], s['pulses_per_kwh'], s['offset_kwh'])
             for m, s in stände.items()))
@@ -519,8 +519,17 @@ class Allocator:
 
     def _allocate_ungecacht(self, start_ts: float, end_ts: float) -> dict:
         """Die eigentliche Rechnung, ohne Zwischenspeicher."""
-        meter_ids = self.db.meter_ids()
+        # Stillgelegte Zähler gehören in einen Zeitraum, in dem sie noch
+        # gezählt haben — sonst verschöbe sich deren Verbrauch nachträglich
+        # auf die anderen Wohnungen. Ohne Impulse im Zeitraum fallen sie weg.
+        meter_ids = self.db.meter_ids(include_retired=True)
         pulse_buckets = self._pulses_per_interval(meter_ids, start_ts, end_ts)
+        stillgelegt = set(self.db.retired_meter_ids())
+        if stillgelegt:
+            mit_impulsen = {m for zaehler in pulse_buckets.values()
+                            for m, n in zaehler.items() if n > 0}
+            meter_ids = [m for m in meter_ids
+                         if m not in stillgelegt or m in mit_impulsen]
 
         totals = {
             m: {'consumption_kwh': 0.0, 'grid_kwh': 0.0, 'solar_kwh': 0.0}

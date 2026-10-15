@@ -178,14 +178,29 @@ alphabetischer Reihenfolge. Die Stockwerksfolge steht in
 `s0counter/ordnung.py` und `dashboard.js` (`reihenfolge`); ein Test hält
 beide gleich.
 
-**Entfernen: derzeit nicht vorgesehen.** Wer den Block aus der
-Konfiguration löscht, erfasst keine neuen Impulse mehr. Der Zähler bleibt
-aber mit seinen bisherigen Impulsen in der Datenbank und erscheint
-weiter mit dem letzten Stand in Status, Dashboard, Home Assistant und in der
-Aufteilung, dort ab dann mit 0 kWh. Eine Stilllegung, die die Historie
-behält und den Zähler aus den laufenden Anzeigen nimmt, fehlt noch.
-`sudo s0ctl ha-remove` entfernt die Sensoren *aller* Zähler aus Home
-Assistant, nicht eines einzelnen.
+**Entfernen (stilllegen):**
+
+1. Den Block `[meters.<kennung>]` aus der Konfiguration löschen und den
+   Dienst neu starten (`sudo systemctl restart s0counter`). Ab jetzt wird
+   nicht mehr gezählt.
+2. Stilllegen:
+   ```bash
+   sudo s0ctl retire <kennung>
+   ```
+
+Der Zähler verschwindet damit aus Status, Dashboard, Panel und Home
+Assistant (seine zwei Sensoren werden dort entfernt). **Gelöscht wird
+nichts:** Impulse, Offset und Audit-Log bleiben. In Aufteilung und
+Jahresbericht erscheint er weiter für Zeiträume, in denen er gezählt hat —
+sonst würde sein Verbrauch nachträglich auf die anderen Wohnungen
+umgelegt. Für spätere Zeiträume fällt er weg.
+
+`retire` verweigert, solange die Kennung noch in der Konfiguration steht.
+Trägt man den Block später wieder ein, ist der Zähler nach dem Neustart
+wieder aktiv und zählt unter derselben Kennung weiter; beides steht im
+Audit-Log. Hat man nur den Block gelöscht und das Stilllegen vergessen,
+meldet `sudo s0ctl doctor` den Zähler als „nicht mehr in der
+Konfiguration, aber noch aktiv“.
 
 **Impulsrate ändern:** Der Stand wird aus allen gespeicherten Impulsen
 geteilt durch `pulses_per_kwh` berechnet, plus Offset. Eine geänderte Rate
@@ -971,8 +986,8 @@ korrekt, aber eben ungemessen:
 
 | | Umfang |
 |---|---|
-| CI, grüner Badge | 415 Tests |
-| lokal, mit dem Paket `edip320` | 442 Tests |
+| CI, grüner Badge | 428 Tests |
+| lokal, mit dem Paket `edip320` | 455 Tests |
 
 **Das Anzeigepanel ist also nur lokal geprüft.** Wer daran etwas ändert,
 braucht das Paket `edip320` im Pfad; ein grüner Badge sagt darüber nichts. Der CI-Lauf gibt diese Einschränkung selbst als Notiz

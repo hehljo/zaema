@@ -19,7 +19,11 @@ CREATE TABLE IF NOT EXISTS meters (
   meter_id       TEXT PRIMARY KEY,
   name           TEXT NOT NULL,
   pulses_per_kwh INTEGER NOT NULL,
-  offset_kwh     REAL NOT NULL DEFAULT 0
+  offset_kwh     REAL NOT NULL DEFAULT 0,
+  -- Zeitpunkt der Stilllegung (`s0ctl retire`), NULL = aktiv. Ein
+  -- stillgelegter Zähler verschwindet aus den laufenden Anzeigen, seine
+  -- Impulse bleiben für vergangene Zeiträume Teil der Rechnung.
+  retired_ts     REAL
 );
 
 CREATE TABLE IF NOT EXISTS pulses (
@@ -166,6 +170,7 @@ class Database:
         self.lock = threading.RLock()
         self.conn = sqlite3.connect(path, check_same_thread=False, timeout=30)
         self.conn.executescript(SCHEMA)
+        self._migrate()
         self.conn.commit()
         self._repair_counters()
 
@@ -175,13 +180,38 @@ class Database:
 
     # --- Einrichtung -----------------------------------------------------
 
+    def _migrate(self) -> None:
+        """Spalten nachrüsten, die eine ältere Datenbank noch nicht hat.
+
+        `CREATE TABLE IF NOT EXISTS` legt neue Spalten nur in einer neuen
+        Datei an; eine bestehende Tabelle bleibt, wie sie war.
+        """
+        spalten = {r[1] for r in self.conn.execute('PRAGMA table_info(meters)')}
+        if 'retired_ts' not in spalten:
+            self.conn.execute('ALTER TABLE meters ADD COLUMN retired_ts REAL')
+
     def ensure_meter(self, meter_id: str, name: str, pulses_per_kwh: int) -> None:
+        """Zähler aus der Konfiguration anlegen oder abgleichen.
+
+        Steht ein stillgelegter Zähler wieder in der Konfiguration, ist er
+        damit wieder aktiv; das landet im Audit-Log.
+        """
         with self.lock:
+            war_stillgelegt = self.conn.execute(
+                'SELECT retired_ts IS NOT NULL FROM meters WHERE meter_id=?',
+                (meter_id,)).fetchone()
             self.conn.execute(
                 'INSERT INTO meters(meter_id, name, pulses_per_kwh) '
                 'VALUES(?,?,?) ON CONFLICT(meter_id) DO UPDATE SET '
-                'name=excluded.name, pulses_per_kwh=excluded.pulses_per_kwh',
+                'name=excluded.name, pulses_per_kwh=excluded.pulses_per_kwh, '
+                'retired_ts=NULL',
                 (meter_id, name, pulses_per_kwh))
+            if war_stillgelegt and war_stillgelegt[0]:
+                self.conn.execute(
+                    'INSERT INTO audit(ts, action, meter_id, details) '
+                    'VALUES(?,?,?,?)',
+                    (time.time(), 'reactivate', meter_id,
+                     'wieder in der Konfiguration'))
             self.conn.execute(
                 'INSERT OR IGNORE INTO counters(meter_id, pulses) VALUES(?, 0)',
                 (meter_id,))
@@ -374,16 +404,27 @@ class Database:
             'power_w': power,
         }
 
-    def all_states(self) -> dict:
-        with self.lock:
-            ids = [r[0] for r in self.conn.execute(
-                'SELECT meter_id FROM meters ORDER BY meter_id')]
-        return {i: self.state(i) for i in ids}
+    def all_states(self, include_retired: bool = False) -> dict:
+        """Stände aller Zähler; stillgelegte nur auf ausdrücklichen Wunsch.
 
-    def meter_ids(self) -> list[str]:
+        Laufende Anzeigen (Status, Dashboard, Home Assistant, Panel) wollen
+        nur aktive Zähler. Rückblicke (Aufteilung, Jahresbericht) brauchen
+        auch die stillgelegten, weil deren Impulse in alten Zeiträumen liegen.
+        """
+        return {i: self.state(i) for i in self.meter_ids(include_retired)}
+
+    def meter_ids(self, include_retired: bool = False) -> list[str]:
+        sql = 'SELECT meter_id FROM meters'
+        if not include_retired:
+            sql += ' WHERE retired_ts IS NULL'
+        with self.lock:
+            return [r[0] for r in self.conn.execute(sql + ' ORDER BY meter_id')]
+
+    def retired_meter_ids(self) -> list[str]:
         with self.lock:
             return [r[0] for r in self.conn.execute(
-                'SELECT meter_id FROM meters ORDER BY meter_id')]
+                'SELECT meter_id FROM meters WHERE retired_ts IS NOT NULL '
+                'ORDER BY meter_id')]
 
     # --- Verwaltung ------------------------------------------------------
 
@@ -406,6 +447,22 @@ class Database:
                  f'impulse={state["pulses"]}'))
             self.conn.commit()
         return offset
+
+    def retire(self, meter_id: str) -> float:
+        """Zähler stilllegen. Löscht nichts: Impulse, Offset und Historie
+        bleiben, der Zähler fällt nur aus den laufenden Anzeigen."""
+        state = self.state(meter_id)
+        jetzt = time.time()
+        with self.lock:
+            self.conn.execute(
+                'UPDATE meters SET retired_ts=? WHERE meter_id=?',
+                (jetzt, meter_id))
+            self.conn.execute(
+                'INSERT INTO audit(ts, action, meter_id, details) VALUES(?,?,?,?)',
+                (jetzt, 'retire', meter_id,
+                 f'stand={state["energy_kwh"]:.6f}; impulse={state["pulses"]}'))
+            self.conn.commit()
+        return jetzt
 
     def audit_log(self, limit: int = 50) -> list[dict]:
         with self.lock:

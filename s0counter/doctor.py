@@ -137,6 +137,17 @@ def pruefe_erfassung(db, config) -> list:
     for meter_id, zustand in sorted(
             zustaende.items(),
             key=lambda paar: ordnung.sortierschluessel(paar[0])):
+        # In der Datenbank aktiv, in der Konfiguration nicht mehr: der Zähler
+        # zählt nicht, erscheint aber weiter in allen Anzeigen. Das ist kein
+        # Verdrahtungsfehler, sondern eine fehlende Stilllegung.
+        konfiguriert = getattr(config, 'meters', None)
+        if konfiguriert is not None and meter_id not in konfiguriert:
+            befunde.append(Befund(
+                'Erfassung', f'{meter_id}: Konfiguration', UNKLAR,
+                'nicht mehr in der Konfiguration, aber noch aktiv',
+                f'stilllegen: sudo s0ctl retire {meter_id} — oder den Block '
+                f'[meters.{meter_id}] wieder eintragen'))
+            continue
         letzter = zustand.get('last_pulse')
         if letzter is None:
             befunde.append(Befund(

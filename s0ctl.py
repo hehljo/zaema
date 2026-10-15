@@ -3,6 +3,7 @@
 
     s0ctl status
     s0ctl set-reading eg 1234.567
+    s0ctl retire wp
     s0ctl export /tmp/export.csv
     s0ctl backup /mnt/nas/s0counter.sqlite3
     s0ctl audit
@@ -164,8 +165,45 @@ def cmd_ha_remove(args, config, db) -> int:
         print(f'Fehlgeschlagen: {exc}', file=sys.stderr)
         return 3
 
-    removed = client.remove_entities(db.meter_ids())
+    removed = client.remove_entities(db.meter_ids(include_retired=True))
     print(f'{removed} Sensoren entfernt')
+    return 0
+
+
+def cmd_retire(args, config, db) -> int:
+    """Zähler stilllegen: aus den laufenden Anzeigen nehmen, nichts löschen."""
+    meter = args.meter
+    if meter in config.meters:
+        print(f'{meter} steht noch in der Konfiguration. Erst den Block '
+              f'[meters.{meter}] entfernen und den Dienst neu starten '
+              f'(sudo systemctl restart s0counter), dann stilllegen.',
+              file=sys.stderr)
+        return 2
+    if meter not in db.meter_ids(include_retired=True):
+        print(f'Unbekannter Zähler: {meter}', file=sys.stderr)
+        return 2
+    if meter in db.retired_meter_ids():
+        print(f'{meter} ist bereits stillgelegt.')
+        return 0
+
+    state = db.state(meter)
+    db.retire(meter)
+    print(f'{meter} stillgelegt. Letzter Stand {state["energy_kwh"]:.3f} kWh, '
+          f'{state["pulses"]} Impulse bleiben gespeichert.')
+
+    settings = config.homeassistant
+    if settings.enabled and settings.url and settings.token:
+        from s0counter.homeassistant import HomeAssistantClient, HomeAssistantError
+        try:
+            client = HomeAssistantClient(settings.url, settings.token,
+                                         settings.prefix, settings.timeout)
+            removed = client.remove_entities([meter])
+            print(f'{removed} Sensoren aus Home Assistant entfernt.')
+        except HomeAssistantError as exc:
+            print(f'Home Assistant nicht erreicht ({exc}); die Sensoren von '
+                  f'{meter} bleiben dort. Später mit sudo s0ctl ha-remove '
+                  f'nachholen, die aktiven Zähler legt der Dienst danach '
+                  f'von selbst wieder an.', file=sys.stderr)
     return 0
 
 
@@ -745,6 +783,10 @@ def _parser() -> argparse.ArgumentParser:
     audit = sub.add_parser('audit', help='Korrekturen anzeigen')
     audit.add_argument('--limit', type=int, default=50)
 
+    retire = sub.add_parser(
+        'retire', help='Zähler stilllegen (Historie bleibt)')
+    retire.add_argument('meter')
+
     sub.add_parser('ha-test', help='Home Assistant prüfen und veröffentlichen')
     sub.add_parser('ha-remove', help='Sensoren aus Home Assistant entfernen')
 
@@ -819,6 +861,7 @@ def main() -> int:
         'audit': cmd_audit,
         'ha-test': cmd_ha_test,
         'ha-remove': cmd_ha_remove,
+        'retire': cmd_retire,
         'balance': cmd_balance,
         'allocate': cmd_allocate,
         'report': cmd_report,

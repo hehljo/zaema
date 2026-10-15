@@ -488,7 +488,7 @@ def build_year_report(year: int, db, balance_store, config,
                           model)
     allocation = allocator.allocate(start, end)
 
-    states = db.all_states()
+    states = db.all_states(include_retired=True)
     names = {mid: state['name'] for mid, state in states.items()}
 
     report = YearReport(allocation, names, states, config.report)

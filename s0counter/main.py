@@ -618,7 +618,8 @@ class Service:
         def zahl(wert, stellen=3):
             return f'{wert:.{stellen}f}'.replace('.', ',')
 
-        namen = {mid: z['name'] for mid, z in self.db.all_states().items()}
+        namen = {mid: z['name'] for mid, z
+                 in self.db.all_states(include_retired=True).items()}
         schreiber.writerow(['Wohnung', 'Name', 'Verbrauch kWh',
                             'aus PV und Speicher kWh', 'aus dem Netz kWh',
                             'PV-Anteil %'])
@@ -655,7 +656,7 @@ class Service:
         from . import report as report_module
 
         # Namen und Zählerstände aus derselben Quelle wie der Jahresbericht.
-        zustaende = self.db.all_states()
+        zustaende = self.db.all_states(include_retired=True)
         namen = {mid: z['name'] for mid, z in zustaende.items()}
         bericht = report_module.YearReport(
             daten, namen, zustaende, self.config.report)
