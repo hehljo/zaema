@@ -150,6 +150,56 @@ Beim Start abgelehnt wird eine Kombination, in der `bounce_ms` die
 Plausibilitätsgrenze erreicht: die Entprellung verwürfe dann alles, was die
 Plausibilitätsprüfung sehen sollte, und diese liefe wirkungslos mit.
 
+### Zähler hinzufügen, entfernen, Impulsrate ändern
+
+Jeder Zähler ist ein Block `[meters.<kennung>]` in
+`/etc/s0counter/config.toml`. Die Kennung (`eg`, `og`, `dg` oder eine eigene,
+klein und ohne Leerzeichen) steht in der Datenbank, im Dashboard und in den
+Home-Assistant-Sensoren (`sensor.s0_<kennung>_energy`). Sie lässt sich danach
+nicht mehr umbenennen, ohne die Historie zu trennen.
+
+**Hinzufügen**, etwa am vierten Kanal des Moduls:
+
+1. Verdrahtung durch eine Elektrofachkraft (siehe „Wer das nachbauen darf“).
+   Pi-seitig einen freien GPIO wählen; doppelt vergebene oder unbrauchbare
+   Pins lehnt der Dienst beim Start ab.
+2. Einen vorhandenen `[meters.…]`-Block kopieren, Kennung, `name`, `gpio` und
+   `pulses_per_kwh` anpassen.
+3. Prüfen und neu starten:
+   ```bash
+   sudo /opt/s0counter/venv/bin/python -m s0counter.main -c /etc/s0counter/config.toml --check-config
+   sudo systemctl restart s0counter
+   ```
+4. Den Kanal wie in Abschnitt 5 testen und den Stand vom Zähler übernehmen:
+   `sudo s0ctl set-reading <kennung> <kWh>` (Abschnitt 6).
+
+Zähler mit eigener Kennung erscheinen nach `eg`, `og`, `dg` in
+alphabetischer Reihenfolge. Die Stockwerksfolge steht in
+`s0counter/ordnung.py` und `dashboard.js` (`reihenfolge`); ein Test hält
+beide gleich.
+
+**Entfernen: derzeit nicht vorgesehen.** Wer den Block aus der
+Konfiguration löscht, erfasst keine neuen Impulse mehr. Der Zähler bleibt
+aber mit seinen bisherigen Impulsen in der Datenbank und erscheint
+weiter mit dem letzten Stand in Status, Dashboard, Home Assistant und in der
+Aufteilung, dort ab dann mit 0 kWh. Eine Stilllegung, die die Historie
+behält und den Zähler aus den laufenden Anzeigen nimmt, fehlt noch.
+`sudo s0ctl ha-remove` entfernt die Sensoren *aller* Zähler aus Home
+Assistant, nicht eines einzelnen.
+
+**Impulsrate ändern:** Der Stand wird aus allen gespeicherten Impulsen
+geteilt durch `pulses_per_kwh` berechnet, plus Offset. Eine geänderte Rate
+gilt deshalb **rückwirkend für alle bisherigen Impulse** dieses Zählers, auch
+für vergangene Zeiträume in Aufteilung und Jahresbericht.
+
+- Stand die Rate von Anfang an falsch: in der Konfiguration korrigieren, neu
+  starten und mit `set-reading` den Stand vom Zähler übernehmen. Damit stimmt
+  der Gesamtstand; die Aufteilung vergangener Zeiträume rechnet ab dann mit
+  der richtigen Rate.
+- Wird ein Zähler gegen einen mit anderer Rate getauscht: neue Kennung
+  vergeben (etwa `eg2`) statt die Rate des alten Blocks zu ändern, sonst
+  werden die Impulse des alten Zählers mit der neuen Rate umgerechnet.
+
 ## 2. Basis-Image
 
 Raspberry Pi OS Lite 64-bit (Trixie), ohne Desktop. Im Imager Hostname,
