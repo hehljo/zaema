@@ -831,6 +831,29 @@ S0_BACKUP_TARGET=/mnt/nas/strom S0_BACKUP_KEEP_DAYS=180 /opt/s0counter/backup.sh
 
 ---
 
+### Eichrecht: Werte zur Information, nicht zur Abrechnung
+
+Die geeichten Wohnungszähler messen; Zaema zählt nur ihre Impulse mit und
+verteilt den Netzbezug rechnerisch anhand der Daten der Sonnenbatterie. Für
+diese Verteilung wird kein geeichtes Messgerät verwendet. Nach § 33 Abs. 1
+MessEG dürfen im geschäftlichen Verkehr aber nur Werte verwendet werden, die
+mit einem dafür bestimmten Messgerät ermittelt wurden. Eine Abrechnung
+zwischen Vermieter und Mieter oder zwischen Eigentümern läuft deshalb über
+die Stände der geeichten Zähler, nicht über `/allocation` oder den
+Jahresbericht. Die Aufteilung hier taugt für die eigene Übersicht, zum
+Plausibilisieren und für Absprachen innerhalb der Familie.
+
+### Datenschutz: Verbrauch anderer Wohnungen
+
+Wer die Zähler mehrerer Wohnungen erfasst, speichert den Stromverbrauch
+anderer Haushalte, und der verrät, wann jemand zu Hause ist, schläft oder
+verreist. Alle Daten bleiben auf dem Pi und auf dem Netzlaufwerk, das du
+selbst einträgst; Zaema schickt nichts ins Internet. Ausnahme ist der
+Jahresbericht per Telegram, wenn du ihn einschaltest: dann liegt er auch
+bei Telegram. Sag den Bewohnern der anderen Wohnungen, dass und was erfasst
+wird, und kläre vorher, wer die Daten sehen darf. Das ist eine Einordnung,
+keine Rechtsberatung.
+
 ### HTTP-Schnittstelle: nur lesend, ohne Anmeldung
 
 Dashboard, `/status`, `/history` und `/audit` antworten **ohne Anmeldung**

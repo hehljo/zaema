@@ -8,17 +8,17 @@
 #
 #   ./deploy.sh                 überträgt geänderte Dateien und startet neu
 #   ./deploy.sh --dry-run       zeigt nur, was sich unterscheidet
-#   ./deploy.sh --host devpi    anderer SSH-Host (Standard: devpi)
+#   ./deploy.sh --host pi       SSH-Host (Standard: $ZAEMA_HOST, sonst raspberrypi)
 #
 # Warum nicht `git pull` auf dem Pi: dort liegt bewusst kein Repository. Der
 # Pi bekommt Code, keine Historie — und keinen Schreibzugriff auf das Remote.
 #
-# Warum `cat >` statt scp: derselbe Grund wie bei der Synology (siehe
-# CLAUDE.md) — ein Weg für alle Ziele ist ein Weg weniger, der kaputtgehen
-# kann, und `cat` braucht kein SFTP-Subsystem.
+# Warum `cat >` statt scp: manche Ziele (etwa eine Synology) bieten kein
+# SFTP-Subsystem an. Ein Weg für alle Ziele ist ein Weg weniger, der
+# kaputtgehen kann, und `cat` braucht kein SFTP.
 set -euo pipefail
 
-HOST=devpi
+HOST=${ZAEMA_HOST:-raspberrypi}
 DRY_RUN=0
 ZIEL=/opt/s0counter/s0counter
 
