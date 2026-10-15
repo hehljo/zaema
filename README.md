@@ -831,6 +831,16 @@ S0_BACKUP_TARGET=/mnt/nas/strom S0_BACKUP_KEEP_DAYS=180 /opt/s0counter/backup.sh
 
 ---
 
+### HTTP-Schnittstelle: nur lesend, ohne Anmeldung
+
+Dashboard, `/status`, `/history` und `/audit` antworten **ohne Anmeldung**
+und hören standardmäßig auf allen Schnittstellen (`http_host = "0.0.0.0"`).
+Jeder im selben Netz kann damit den Verbrauch der Wohnungen ablesen;
+schreiben kann über HTTP niemand, es gibt nur `GET`. Betreib den Dienst
+deshalb nur im eigenen Heimnetz und leite Port 8080 **nie** ins Internet
+weiter. Für Zugriff von unterwegs ein VPN nehmen. Wer das Dashboard nur auf
+dem Pi selbst braucht, setzt `http_host = "127.0.0.1"`.
+
 ## Anzeigepanel (optional)
 
 `s0counter/panel.py` kann Zählerstände und Hausbilanz zusätzlich auf einem
