@@ -3,7 +3,8 @@
 Zwei Prüfungen, getrennt gehalten:
 
 - **F1–F6** — Prüfung des Uploads `eltako-s0-raspi.zip` (Stand 04.08.2026),
-  am Schreibtisch.
+  am Schreibtisch. Der Upload war eine eigene, KI-gestützte Erstfassung des
+  Autors; „Upload“ meint hier nur diesen frühen Stand.
 - **F7–F10** — Test auf echter Hardware (09.08.2026, Raspberry Pi OS Trixie).
   Diese Fehler sind auf einem Entwicklungsrechner nicht auffindbar.
 

@@ -14,6 +14,11 @@ Im Einsatz mit drei Eltako DSZ15D-3x80A (EG, OG, DG) an einem
 > **Zaema?** *Zähl ma* — augschburgerisch für „zählen wir". Genau das tut es:
 > zählen, was drei Wohnungen verbrauchen, und dazusagen, woher der Strom kam.
 
+Entstanden für den Eigenbedarf in einem Haus mit drei Wohnungen und ohne
+Anspruch auf amtliche Verwendbarkeit: Die Werte dienen der eigenen Übersicht.
+Geschrieben vom Autor mit KI-Unterstützung, geprüft durch die Testsuite und
+den Betrieb an der echten Anlage.
+
 Der Name gilt für das Projekt, nicht für die Anlage: Dienst, Pfade und
 Home-Assistant-Entitäten heißen weiterhin `s0counter` bzw. `sensor.s0_*`. Das
 sind Verträge mit systemd, dem Dateisystem und dem Recorder-Verlauf — ein
