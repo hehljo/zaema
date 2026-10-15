@@ -883,8 +883,8 @@ korrekt, aber eben ungemessen:
 
 | | Umfang |
 |---|---|
-| CI, grüner Badge | 412 Tests |
-| lokal, mit dem Paket `edip320` | 440 Tests |
+| CI, grüner Badge | 415 Tests |
+| lokal, mit dem Paket `edip320` | 442 Tests |
 
 **Das Anzeigepanel ist also nur lokal geprüft.** Wer daran etwas ändert,
 braucht das Paket `edip320` im Pfad; ein grüner Badge sagt darüber nichts. Der CI-Lauf gibt diese Einschränkung selbst als Notiz
