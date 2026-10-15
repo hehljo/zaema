@@ -1,0 +1,14 @@
+[Unit]
+Description=Jahresbericht am 31.12.
+
+[Timer]
+# 23:50 statt 23:59: der Bericht braucht bei einem vollen Jahr etwa eine
+# Minute, und die letzten Minuten des Jahres fallen ohnehin unter den
+# Erfassungszeitraum des Folgejahres.
+OnCalendar=*-12-31 23:50:00
+# Nachholen, falls der Pi zum Zeitpunkt aus war.
+Persistent=true
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,26 @@
+[Unit]
+Description=Jahresbericht des S0-Zaehlers erzeugen und verschicken
+Documentation=file:/opt/s0counter/README.md
+After=network-online.target s0counter.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=s0counter
+Group=s0counter
+# Wie beim Hauptdienst: ein Arbeitsverzeichnis, in dem der Dienstbenutzer
+# schreiben darf. Der Bericht braucht kein GPIO, aber ohne Angabe erbt der
+# Dienst "/" — und schreibende Bibliotheken laufen dort genauso auf.
+WorkingDirectory=/var/lib/s0counter
+Environment=PYTHONPATH=/opt/s0counter
+# Der Timer feuert am 31.12. um 23:50. Ohne --year nimmt der Bericht das
+# laufende Jahr, was zu diesem Zeitpunkt das richtige ist.
+# --both erzeugt beide Verteilmodelle als getrennte PDF.
+ExecStart=/opt/s0counter/venv/bin/python /opt/s0counter/s0ctl.py \
+    -c /etc/s0counter/config.toml report --both --send
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/s0counter

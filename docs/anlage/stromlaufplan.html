@@ -1,0 +1,1960 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Stromlaufplan — S0-Erfassung 3 WE</title>
+<style>
+  @page { size: A3 landscape; margin: 0; }
+
+  :root {
+    --ink:      #000000;
+    --thin:     #000000;
+    --grey:     #555555;
+    --light:    #999999;
+    --pot:      #000000;
+    --sans: "DejaVu Sans", Arial, sans-serif;
+    --mono: "DejaVu Sans Mono", monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #ffffff;
+    color: var(--ink);
+    font-family: var(--sans);
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Ein Blatt = A3 quer = 420 x 297 mm */
+  .blatt {
+    width: 420mm;
+    height: 297mm;
+    position: relative;
+    page-break-after: always;
+    overflow: hidden;
+    background: #fff;
+  }
+  .blatt:last-child { page-break-after: auto; }
+
+  /* Zeichnungsrahmen nach DIN EN ISO 5457: 10 mm Rand, links 20 mm Heftrand.
+     Rahmen: von 20mm bis 410mm waagrecht, 10mm bis 287mm senkrecht. */
+  .rahmen {
+    position: absolute;
+    left: 20mm; top: 10mm; right: 10mm; bottom: 10mm;
+    border: 0.7mm solid var(--ink);
+  }
+  /* Zeichenflaeche INNERHALB des Rahmens, mit 4 mm Luft zur Rahmenlinie.
+     Nutzbar damit 382 x 269 mm. */
+  .feld {
+    position: absolute;
+    left: 24mm; top: 14mm;
+    width: 382mm; height: 269mm;
+    padding: 0;
+  }
+
+  /* Blattbeschriftung im Rahmen (Zonen A..H / 1..6) */
+  .zonen { position: absolute; inset: 0; pointer-events: none; }
+  .zonen span {
+    position: absolute;
+    font-family: var(--mono);
+    font-size: 2.6mm;
+    color: var(--ink);
+    text-align: center;
+  }
+
+  /* Schriftfeld nach ISO 7200, unten rechts im Rahmen */
+  .schriftfeld {
+    position: absolute;
+    right: 0; bottom: 0;
+    width: 180mm;
+    border: 0.7mm solid var(--ink);
+    background: #fff;
+    display: grid;
+    grid-template-columns: 62mm 32mm 26mm 30mm 28mm;
+    grid-auto-rows: minmax(7.5mm, auto);
+    font-family: var(--mono);
+    font-size: 2.5mm;
+  }
+  .schriftfeld .z {
+    border-right: 0.25mm solid var(--ink);
+    border-bottom: 0.25mm solid var(--ink);
+    padding: 0.8mm 1.4mm;
+    overflow: hidden;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+  .schriftfeld .z:last-child { border-right: none; }
+  .schriftfeld .lbl {
+    font-size: 1.9mm;
+    color: var(--grey);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    display: block;
+  }
+  .schriftfeld .val { font-size: 2.7mm; }
+  .schriftfeld .val.gross { font-size: 3.6mm; font-family: var(--sans); font-weight: bold; }
+  /* Fliesstext in breiten Zellen kleiner setzen, damit er vollstaendig steht */
+  .schriftfeld .val.lang { font-size: 2.2mm; line-height: 1.3; }
+  .sf-nobottom { border-bottom: none !important; }
+  .sf-noright  { border-right: none !important; }
+
+  /* Blattkopf ueber der Zeichnung */
+  .kopf {
+    position: absolute;
+    left: 0; top: 0;
+    width: 382mm; height: 12mm;
+    border-bottom: 0.35mm solid var(--ink);
+    display: flex;
+    align-items: baseline;
+    gap: 6mm;
+  }
+  .kopf .nr {
+    font-family: var(--mono);
+    font-size: 3mm;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--grey);
+    padding-top: 3mm;
+  }
+  .kopf h1 {
+    font-size: 5mm;
+    font-weight: bold;
+    margin: 0;
+    padding-top: 2.4mm;
+  }
+  .kopf .sub {
+    font-family: var(--mono);
+    font-size: 2.5mm;
+    color: var(--grey);
+    margin-left: auto;
+    padding-top: 3.5mm;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .kopf h1 { flex-shrink: 1; min-width: 0; }
+  .kopf .nr { flex-shrink: 0; }
+
+  /* Zeichenflaeche zwischen Kopf und Schriftfeld.
+     Hoehe so gewaehlt, dass die Zeichnung ueber dem Schriftfeld endet. */
+  .zeichnung {
+    position: absolute;
+    left: 0; top: 15mm;
+    width: 382mm; height: 212mm;
+  }
+  .zeichnung svg { display: block; width: 100%; height: 100%; }
+
+  /* Textblaetter (Listen): volle Breite. Die Hoehe endet oberhalb des
+     Schriftfelds, damit die zweite Spalte nicht darunter laeuft. */
+  .textflaeche {
+    position: absolute;
+    left: 0; top: 15mm;
+    width: 382mm; height: 210mm;
+    column-gap: 9mm;
+    column-fill: auto;
+  }
+  .textflaeche.zwei { column-count: 2; }
+  .textflaeche.eng  { column-count: 2; column-gap: 8mm; }
+
+  h2.abschnitt {
+    font-size: 3.4mm;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    margin: 0 0 2mm;
+    padding-bottom: 1mm;
+    border-bottom: 0.35mm solid var(--ink);
+    break-after: avoid;
+  }
+  h2.abschnitt + p, h2.abschnitt + table, h2.abschnitt + .tabwrap { break-before: avoid; }
+  h3.unter {
+    font-size: 2.9mm;
+    font-weight: bold;
+    margin: 4mm 0 1.5mm;
+    break-after: avoid;
+  }
+  .textflaeche p {
+    font-size: 2.7mm;
+    line-height: 1.45;
+    margin: 0 0 2mm;
+    color: #000;
+  }
+  .textflaeche p.hinweis {
+    border-left: 0.6mm solid var(--ink);
+    padding: 1.2mm 0 1.2mm 2mm;
+    background: #f0f0f0;
+    break-inside: avoid;
+  }
+  .textflaeche ol, .textflaeche ul { font-size: 2.7mm; line-height: 1.45; margin: 0 0 2mm; padding-left: 5mm; }
+  .textflaeche li { margin-bottom: 1.2mm; break-inside: avoid; }
+  .erw { font-family: var(--mono); font-size: 2.4mm; color: var(--grey); display: block; }
+
+  table.liste {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 2.55mm;
+    margin: 0 0 3mm;
+    break-inside: auto;
+  }
+  table.liste th, table.liste td {
+    border: 0.25mm solid var(--ink);
+    padding: 0.9mm 1.2mm;
+    text-align: left;
+    vertical-align: top;
+    line-height: 1.3;
+  }
+  table.liste th {
+    background: #e6e6e6;
+    font-size: 2.3mm;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+  }
+  table.liste td.k { font-family: var(--mono); font-weight: bold; white-space: nowrap; }
+  table.liste td.m { font-family: var(--mono); white-space: nowrap; }
+  table.liste tr { break-inside: avoid; }
+
+  /* SVG-Grundeinstellungen */
+  svg text { font-family: var(--sans); fill: #000; }
+  svg .m  { font-family: var(--mono); }
+  svg .bmk { font-family: var(--mono); font-weight: bold; }
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════════════
+     BLATT 1  —  Übersichtsplan
+     ════════════════════════════════════════════════════════════ -->
+<section class="blatt">
+  <div class="rahmen"></div>
+  <div class="feld">
+
+    <div class="kopf">
+      <span class="nr">= S0 &nbsp;·&nbsp; Blatt 1</span>
+      <h1>Übersichtsplan</h1>
+      <span class="sub">Anlagenübersicht · Potentialtrennung · Kreise G1 G2</span>
+    </div>
+
+    <div class="zeichnung">
+      <svg viewBox="0 0 1160 884" preserveAspectRatio="xMidYMid meet" role="img"
+           aria-label="Übersichtsplan der S0-Erfassung. Im Zählerschrank am Ort plus ZS stehen ausschließlich die drei Eltako-Zähler B1 bis B3. Alles übrige — beide Netzteile, die Optokopplerbaugruppe A2, die Rechnereinheit A1 und sämtliche Klemmen — sitzt im neuen Schrank am Ort plus HWR. Verbunden sind beide Orte durch die eine Leitung W1, ein Netzwerk-Verlegekabel, in dem jeder Zähler ein eigenes verdrilltes Paar für S0 plus und S0 minus belegt. Das Netzteil G2 speist darüber die 5-Volt-Stromschleife der Zähler auf die Eingangsseite von A2; deren galvanisch getrennte Ausgänge führen auf drei GPIO-Eingänge von A1. Das Netzteil G1 speist ausschließlich die Rechnereinheit A1 über das Micro-USB-Kabel W7. Beide Netzteile liefern 5 Volt, ihre Null-Volt-Zweige bleiben getrennt.">
+
+        <!-- ===== Ortsrahmen: Zählerschrank +ZS, nur die Zähler ===== -->
+        <g stroke="#000" fill="none">
+          <rect x="20" y="60" width="270" height="600" stroke-dasharray="10 6" stroke-width="1.6"/>
+        </g>
+        <text x="34" y="84" class="m" font-size="16" fill="#555">ORT +ZS · ZÄHLERSCHRANK</text>
+        <text x="34" y="104" class="m" font-size="13" fill="#555">nur die Zähler -B1…-B3</text>
+
+        <!-- ===== Ortsrahmen: neuer Schrank +HWR, alles übrige ===== -->
+        <g stroke="#000" fill="none">
+          <rect x="296" y="60" width="844" height="600" stroke-dasharray="10 6" stroke-width="1.6"/>
+        </g>
+        <text x="590" y="84" class="m" font-size="16" fill="#555">ORT +HWR · NEUER SCHRANK — Netzteile, -A2, -A1, Klemmen</text>
+        <text x="590" y="104" class="m" font-size="13" fill="#555">Kreis G2 links der Trennlinie, Kreis G1 rechts davon</text>
+
+        <!-- ===== Leitung W1 zwischen den Orten ===== -->
+        <g stroke="#000" fill="none">
+          <rect x="256" y="120" width="34" height="360" stroke-width="1.2" stroke-dasharray="5 4"/>
+        </g>
+        <text x="273" y="500" class="bmk" font-size="14" text-anchor="middle">W1</text>
+
+        <!-- ===== Trennlinie galvanische Trennung ===== -->
+        <line x1="565" y1="52" x2="565" y2="700" stroke="#000" stroke-width="2.6" stroke-dasharray="14 8"/>
+        <g transform="translate(565,24)">
+          <text x="0" y="0" text-anchor="middle" class="bmk" font-size="19">GALVANISCHE TRENNUNG</text>
+          <text x="0" y="18" text-anchor="middle" class="m" font-size="15" fill="#555">Optokoppler -A2 · keine gemeinsame Masse</text>
+        </g>
+
+        <!-- ===== Zähler B1..B3 ===== -->
+        <g stroke="#000" stroke-width="2" fill="#fff">
+          <rect x="50" y="120" width="200" height="92"/>
+          <rect x="50" y="252" width="200" height="92"/>
+          <rect x="50" y="384" width="200" height="92"/>
+        </g>
+        <g font-size="18">
+          <text x="64" y="148" class="bmk">-B1</text>
+          <text x="64" y="172" font-size="16">Zähler EG</text>
+          <text x="64" y="194" class="m" font-size="14" fill="#555">DSZ15D · 1000 Imp/kWh</text>
+
+          <text x="64" y="280" class="bmk">-B2</text>
+          <text x="64" y="304" font-size="16">Zähler OG</text>
+          <text x="64" y="326" class="m" font-size="14" fill="#555">DSZ15D · 1000 Imp/kWh</text>
+
+          <text x="64" y="412" class="bmk">-B3</text>
+          <text x="64" y="436" font-size="16">Zähler DG</text>
+          <text x="64" y="458" class="m" font-size="14" fill="#555">DSZ15D · 1000 Imp/kWh</text>
+        </g>
+
+        <!-- ===== Netzteil G2 ===== -->
+        <g stroke="#000" stroke-width="2" fill="#fff">
+          <rect x="50" y="530" width="200" height="76"/>
+        </g>
+        <text x="64" y="558" class="bmk" font-size="18">-G2</text>
+        <text x="64" y="580" font-size="16">5 V DC · 5 A</text>
+        <text x="64" y="599" class="m" font-size="14" fill="#555">SELV · S0-Schleife</text>
+
+        <!-- ===== Klemmenleiste X1 ===== -->
+        <g stroke="#000" stroke-width="2" fill="#fff">
+          <rect x="300" y="120" width="46" height="486"/>
+        </g>
+        <text x="323" y="112" class="bmk" font-size="17" text-anchor="middle">-X1</text>
+        <g fill="none" stroke="#000" stroke-width="1.4">
+          <circle cx="323" cy="166" r="9" fill="#fff"/>
+          <circle cx="323" cy="298" r="9" fill="#fff"/>
+          <circle cx="323" cy="430" r="9" fill="#fff"/>
+          <circle cx="323" cy="568" r="9" fill="#fff"/>
+        </g>
+        <g class="m" font-size="13" fill="#555">
+          <text x="352" y="152">1·2</text>
+          <text x="352" y="284">3·4</text>
+          <text x="352" y="416">5·6</text>
+          <text x="352" y="554">7</text>
+        </g>
+
+        <!-- ===== Optokoppler A2 ===== -->
+        <g stroke="#000" stroke-width="2" fill="#fff">
+          <rect x="400" y="120" width="90" height="486"/>
+        </g>
+        <text x="445" y="112" class="bmk" font-size="17" text-anchor="middle">-A2</text>
+        <text x="445" y="640" class="m" font-size="14" fill="#555" text-anchor="middle">PC817 · 4-kanalig</text>
+        <text x="445" y="658" class="m" font-size="14" fill="#555" text-anchor="middle">Kanal 4 frei</text>
+        <!-- drei Optokoppler-Symbole vereinfacht -->
+        <g stroke="#000" stroke-width="1.8" fill="none">
+          <!-- Kanal 1 -->
+          <path d="M420 152 L420 180 M410 166 L430 166" />
+          <path d="M414 160 L426 166 L414 172 Z" fill="#000" stroke="none"/>
+          <path d="M456 152 L456 180" />
+          <path d="M448 166 L456 160 L456 172 Z" fill="#000" stroke="none"/>
+          <path d="M434 162 L444 162 M434 170 L444 170" stroke-width="1.2"/>
+          <!-- Kanal 2 -->
+          <path d="M420 284 L420 312 M410 298 L430 298" />
+          <path d="M414 292 L426 298 L414 304 Z" fill="#000" stroke="none"/>
+          <path d="M456 284 L456 312" />
+          <path d="M448 298 L456 292 L456 304 Z" fill="#000" stroke="none"/>
+          <path d="M434 294 L444 294 M434 302 L444 302" stroke-width="1.2"/>
+          <!-- Kanal 3 -->
+          <path d="M420 416 L420 444 M410 430 L430 430" />
+          <path d="M414 424 L426 430 L414 436 Z" fill="#000" stroke="none"/>
+          <path d="M456 416 L456 444" />
+          <path d="M448 430 L456 424 L456 436 Z" fill="#000" stroke="none"/>
+          <path d="M434 426 L444 426 M434 434 L444 434" stroke-width="1.2"/>
+        </g>
+        <g class="m" font-size="12" fill="#555">
+          <text x="404" y="200">IN1</text><text x="452" y="200">OUT1</text>
+          <text x="404" y="332">IN2</text><text x="452" y="332">OUT2</text>
+          <text x="404" y="464">IN3</text><text x="452" y="464">OUT3</text>
+        </g>
+
+        <!-- ===== Verbindungen Zähler -> X1 -> A2 ===== -->
+        <g stroke="#000" stroke-width="1.8" fill="none">
+          <line x1="250" y1="166" x2="314" y2="166"/>
+          <line x1="332" y1="166" x2="410" y2="166"/>
+          <line x1="250" y1="298" x2="314" y2="298"/>
+          <line x1="332" y1="298" x2="410" y2="298"/>
+          <line x1="250" y1="430" x2="314" y2="430"/>
+          <line x1="332" y1="430" x2="410" y2="430"/>
+          <!-- G2 Speisung auf X1:7 und weiter -->
+          <path d="M250 568 L314 568"/>
+          <path d="M332 568 L370 568 L370 500 L420 500 L420 444"/>
+        </g>
+        <g class="m" font-size="12" fill="#555">
+          <text x="256" y="156">Paar 1</text>
+          <text x="256" y="288">Paar 2</text>
+          <text x="256" y="420">Paar 3</text>
+          <text x="256" y="560" font-size="14" fill="#000">0 V</text>
+        </g>
+        <!-- Erläuterung W1 · unterhalb der Ortsrahmen -->
+        <g>
+          <rect x="20" y="672" width="560" height="86" fill="#fff" stroke="#000" stroke-width="2.2"/>
+          <text x="34" y="696" class="m" font-size="14" font-weight="bold">W1 · Netzwerk-Verlegekabel als S0-Leitung, Cat 6, unter 20 m</text>
+          <text x="34" y="716" class="m" font-size="13">Ein verdrilltes Paar je Zähler: S0+ und S0− desselben Zählers</text>
+          <text x="34" y="734" class="m" font-size="13">gehören ins selbe Paar, Paar 4 bleibt Reserve. Auf Klemmen</text>
+          <text x="34" y="752" class="m" font-size="13">auflegen, keine RJ45-Stecker. Führt keine Netzwerkdaten. Bl. 5.</text>
+        </g>
+
+        <!-- ===== Klemmenleiste X2 ===== -->
+        <g stroke="#000" stroke-width="2" fill="#fff">
+          <rect x="660" y="120" width="46" height="380"/>
+        </g>
+        <text x="683" y="132" class="bmk" font-size="17" text-anchor="middle">-X2</text>
+        <g fill="none" stroke="#000" stroke-width="1.4">
+          <circle cx="683" cy="166" r="9" fill="#fff"/>
+          <circle cx="683" cy="298" r="9" fill="#fff"/>
+          <circle cx="683" cy="430" r="9" fill="#fff"/>
+        </g>
+        <g class="m" font-size="13" fill="#555">
+          <text x="712" y="152">1</text>
+          <text x="712" y="284">2</text>
+          <text x="712" y="416">3</text>
+        </g>
+
+        <!-- A2 -> X2 -->
+        <g stroke="#000" stroke-width="1.8" fill="none">
+          <line x1="490" y1="166" x2="674" y2="166"/>
+          <line x1="490" y1="298" x2="674" y2="298"/>
+          <line x1="490" y1="430" x2="674" y2="430"/>
+        </g>
+        <g class="m" font-size="14">
+          <text x="500" y="158">aktiv LOW · max. 3,3 V</text>
+          <text x="500" y="290">aktiv LOW</text>
+          <text x="500" y="422">aktiv LOW</text>
+        </g>
+
+        <!-- ===== Rechnereinheit A1 ===== -->
+        <g stroke="#000" stroke-width="2" fill="#fff">
+          <rect x="780" y="130" width="240" height="330"/>
+        </g>
+        <text x="796" y="160" class="bmk" font-size="19">-A1</text>
+        <text x="796" y="186" font-size="17">Raspberry Pi 3B</text>
+        <text x="796" y="208" class="m" font-size="14" fill="#555">Raspberry Pi OS Lite 64 bit</text>
+        <g class="m" font-size="15">
+          <text x="796" y="252">Pin 11 · GPIO17 ← B1</text>
+          <text x="796" y="278">Pin 13 · GPIO27 ← B2</text>
+          <text x="796" y="304">Pin 15 · GPIO22 ← B3</text>
+          <text x="796" y="330">Pin 6 · GND</text>
+        </g>
+        <g stroke="#000" stroke-width="1.8" fill="none">
+          <line x1="692" y1="166" x2="774" y2="166"/>
+          <line x1="692" y1="298" x2="774" y2="298"/>
+          <line x1="692" y1="430" x2="774" y2="430"/>
+          <path d="M692 430 L740 430 L740 320"/>
+        </g>
+
+        <!-- ===== Netzteil G1 — speist Rechnereinheit ===== -->
+        <g stroke="#000" stroke-width="2" fill="#fff">
+          <rect x="780" y="530" width="240" height="76"/>
+        </g>
+        <text x="796" y="558" class="bmk" font-size="18">-G1</text>
+        <text x="796" y="580" font-size="16">5 V DC · 5 A</text>
+        <text x="796" y="599" class="m" font-size="14" fill="#555">speist -A1 über W7</text>
+        <g stroke="#000" stroke-width="1.8" fill="none">
+          <line x1="900" y1="530" x2="900" y2="460"/>
+        </g>
+        <text x="908" y="478" class="m" font-size="13" fill="#555">W7 · µUSB</text>
+
+        <!-- ===== Fussnote Netzwerk ===== -->
+        <g fill="#555" class="m" font-size="14">
+          <text x="620" y="694">Netzwerk, nicht Bestandteil dieser Anlage:</text>
+          <text x="620" y="714">-K1 Sonnenbatterie 192.168.0.50 — vom Pi direkt gelesen</text>
+          <text x="620" y="734">-K2 Home Assistant 192.168.0.30:8123 — Zweitquelle, Anbindung über REST</text>
+        </g>
+        <g fill="#000" class="m" font-size="13">
+          <text x="620" y="760">Querverweise: S0-Kreis → Bl. 2 · Rechnereinheit → Bl. 3 · Klemmen → Bl. 4</text>
+          <text x="620" y="778">Adern → Bl. 5-7 · Betriebsmittel → Bl. 8 · Versorgung → Bl. 9 · Prüfschritte → Bl. 10</text>
+        </g>
+      </svg>
+    </div>
+
+    <div class="schriftfeld">
+      <div class="z"><span class="lbl">Anlage / Benennung</span><span class="val gross">S0-Erfassung 3 WE</span></div>
+      <div class="z"><span class="lbl">Blattart</span><span class="val">Übersichtsplan</span></div>
+      <div class="z"><span class="lbl">Blatt</span><span class="val">1 von 11</span></div>
+      <div class="z"><span class="lbl">Erstellt</span><span class="val">06.08.2026</span></div>
+      <div class="z"><span class="lbl">Änderung</span><span class="val">—</span></div>
+
+      <div class="z"><span class="lbl">Anlagenkennzeichen</span><span class="val">=S0</span></div>
+      <div class="z"><span class="lbl">Ort</span><span class="val">+ZS / +HWR</span></div>
+      <div class="z"><span class="lbl">Format</span><span class="val">A3</span></div>
+      <div class="z"><span class="lbl">Maßstab</span><span class="val">ohne</span></div>
+      <div class="z"><span class="lbl">Index</span><span class="val">a</span></div>
+
+      <div class="z"><span class="lbl">Kennzeichnung</span><span class="val">DIN EN 81346-2</span></div>
+      <div class="z"><span class="lbl">Darstellung</span><span class="val">IEC 60617</span></div>
+      <div class="z"><span class="lbl">Rahmen</span><span class="val">ISO 5457</span></div>
+      <div class="z"><span class="lbl">Schriftfeld</span><span class="val">ISO 7200</span></div>
+      <div class="z"><span class="lbl">Sprache</span><span class="val">de</span></div>
+
+      <div class="z" style="grid-column: 1 / span 2;"><span class="lbl">Anlagenteil</span><span class="val lang">Erfassung dreier Wohnungszähler</span></div>
+      <div class="z" style="grid-column: 3 / span 3;"><span class="lbl">Hinweis</span><span class="val lang">Ausführung nur durch Elektrofachkraft (DIN VDE 1000-10). Zählerplatz und Inbetriebsetzung nur durch eingetragenes Installationsunternehmen (§ 13, § 14 NAV); HAK nur Netzbetreiber. Ab -X2 SELV. Nicht eichfähig — Abrechnungsgrundlage bleibt der Zählerstand am Gerät</span></div>
+
+      <div class="z sf-nobottom" style="grid-column: 1 / span 2;"><span class="lbl">Blattfolge</span><span class="val lang">1 Übersicht · 2 S0-Kreis · 3 Rechnereinheit · 4 Klemmen · 5 Leitung W1 (Cat-Kabel) · 6 Adern S0 im Schrank · 7 Adern GPIO · 8 Betriebsmittel · 9 Versorgung · 10 Inbetriebnahme · 11 Grenzen</span></div>
+      <div class="z sf-nobottom" style="grid-column: 3 / span 2;"><span class="lbl">Zeichnungsnummer</span><span class="val lang">S0-2026-001</span></div>
+      <div class="z sf-nobottom sf-noright"><span class="lbl">Ersetzt</span><span class="val">—</span></div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════
+     BLATT 2  —  Strompfadplan S0-Kreis
+     ════════════════════════════════════════════════════════════ -->
+<section class="blatt">
+  <div class="rahmen"></div>
+  <div class="feld">
+
+    <div class="kopf">
+      <span class="nr">= S0 &nbsp;·&nbsp; Blatt 2</span>
+      <h1>Stromlaufplan — S0-Kreis, Eingangsseite</h1>
+      <span class="sub">Kreis G2 · 5 V DC SELV · Strompfade 1…7</span>
+    </div>
+
+    <div class="zeichnung">
+      <svg viewBox="0 0 1560 884" preserveAspectRatio="xMidYMid meet" role="img"
+           aria-label="Strompfadplan der S0-Eingangsseite. Zwischen der oberen Potentialschiene plus 5 Volt und der unteren Schiene 0 Volt liegen sieben senkrechte Strompfade. Pfade 1, 3 und 5 führen jeweils vom Pluspotential über den S0-Ausgang eines Eltako-Zählers, die Klemmen der Leiste X1 und den Vorwiderstand auf die Leuchtdiode eines Optokopplers und zurück auf 0 Volt. Pfade 2, 4 und 6 zeigen die zugehörigen Transistorausgänge, die auf Blatt 3 weitergeführt werden. Pfad 7 ist die Absicherung F1 der Speisung.">
+
+        <!-- Pfadraster: Nummerierung oben -->
+        <g stroke="#000" stroke-width="0.8" stroke-dasharray="3 5" opacity="0.45">
+          <line x1="150" y1="86" x2="150" y2="782"/>
+          <line x1="330" y1="86" x2="330" y2="782"/>
+          <line x1="510" y1="86" x2="510" y2="782"/>
+          <line x1="690" y1="86" x2="690" y2="782"/>
+          <line x1="870" y1="86" x2="870" y2="782"/>
+          <line x1="1050" y1="86" x2="1050" y2="782"/>
+          <line x1="1290" y1="86" x2="1290" y2="782"/>
+        </g>
+        <g class="m" font-size="19" text-anchor="middle" font-weight="bold">
+          <text x="150" y="72">1</text>
+          <text x="330" y="72">2</text>
+          <text x="510" y="72">3</text>
+          <text x="690" y="72">4</text>
+          <text x="870" y="72">5</text>
+          <text x="1050" y="72">6</text>
+          <text x="1290" y="72">7</text>
+        </g>
+        <line x1="40" y1="84" x2="1520" y2="84" stroke="#000" stroke-width="1"/>
+        <g class="m" font-size="14" fill="#555" text-anchor="middle">
+          <text x="240" y="790">Kanal 1 · EG</text>
+          <text x="600" y="790">Kanal 2 · OG</text>
+          <text x="960" y="790">Kanal 3 · DG</text>
+          <text x="1290" y="790">Speisung</text>
+        </g>
+
+        <!-- Potentialschienen -->
+        <line x1="40" y1="140" x2="1520" y2="140" stroke="#000" stroke-width="3.4"/>
+        <line x1="40" y1="740" x2="1520" y2="740" stroke="#000" stroke-width="3.4"/>
+        <text x="46" y="130" class="m" font-size="18" font-weight="bold">+5 V &nbsp;/&nbsp; -G2 (+) &nbsp;— S0-Schleife, SELV</text>
+        <text x="46" y="768" class="m" font-size="18" font-weight="bold">0 V &nbsp;/&nbsp; -G2 (−) &nbsp;— Bezugspotential Eingangsseite</text>
+
+        <!-- ======= Kanal 1: Pfad 1 (Diodenkreis) ======= -->
+        <g stroke="#000" stroke-width="2" fill="none">
+          <line x1="150" y1="140" x2="150" y2="200"/>
+        </g>
+        <!-- Klemme X1:1 -->
+        <circle cx="150" cy="216" r="11" fill="#fff" stroke="#000" stroke-width="2"/>
+        <text x="172" y="212" class="m" font-size="15">-X1:1</text>
+        <text x="172" y="230" class="m" font-size="13" fill="#555">+5 V auf S0+</text>
+        <line x1="150" y1="227" x2="150" y2="290" stroke="#000" stroke-width="2"/>
+
+        <!-- Zähler B1 als Schalter im Kasten -->
+        <rect x="88" y="290" width="124" height="120" fill="#fff" stroke="#000" stroke-width="2" stroke-dasharray="7 4"/>
+        <text x="96" y="312" class="bmk" font-size="16">-B1</text>
+        <text x="96" y="330" font-size="13">Zähler EG</text>
+        <!-- Schaltersymbol (S0-Ausgang, Schließer) -->
+        <g stroke="#000" stroke-width="2" fill="none">
+          <line x1="150" y1="330" x2="150" y2="350"/>
+          <circle cx="150" cy="352" r="3.4" fill="#000"/>
+          <line x1="150" y1="352" x2="172" y2="382"/>
+          <circle cx="150" cy="386" r="3.4" fill="#000"/>
+          <line x1="150" y1="386" x2="150" y2="410"/>
+        </g>
+        <text x="182" y="360" class="m" font-size="13" fill="#555">S0-Ausgang</text>
+        <text x="182" y="376" class="m" font-size="13" fill="#555">1000 Imp/kWh</text>
+        <text x="96" y="404" class="m" font-size="12" fill="#555">max. 20 mA</text>
+
+        <line x1="150" y1="410" x2="150" y2="452" stroke="#000" stroke-width="2"/>
+        <!-- Klemme X1:2 -->
+        <circle cx="150" cy="468" r="11" fill="#fff" stroke="#000" stroke-width="2"/>
+        <text x="172" y="464" class="m" font-size="15">-X1:2</text>
+        <text x="172" y="482" class="m" font-size="13" fill="#555">Rückführung S0−</text>
+        <line x1="150" y1="479" x2="150" y2="530" stroke="#000" stroke-width="2"/>
+
+        <!-- Optokopplerkasten A2, Kanal 1: LED-Seite -->
+        <rect x="88" y="530" width="124" height="150" fill="#fff" stroke="#000" stroke-width="2"/>
+        <text x="96" y="552" class="bmk" font-size="16">-A2</text>
+        <text x="96" y="570" font-size="13">Kanal 1</text>
+        <!-- Vorwiderstand -->
+        <rect x="136" y="580" width="28" height="42" fill="#fff" stroke="#000" stroke-width="2"/>
+        <text x="172" y="606" class="m" font-size="13" fill="#555">-R1 intern</text>
+        <line x1="150" y1="570" x2="150" y2="580" stroke="#000" stroke-width="2"/>
+        <line x1="150" y1="622" x2="150" y2="636" stroke="#000" stroke-width="2"/>
+        <!-- LED-Symbol -->
+        <g stroke="#000" stroke-width="2" fill="none">
+          <path d="M136 636 L164 636 M150 636 L136 660 L164 660 Z" fill="#000"/>
+          <line x1="136" y1="660" x2="164" y2="660"/>
+          <line x1="150" y1="660" x2="150" y2="680"/>
+          <path d="M168 632 L182 618 M174 634 L188 620" stroke-width="1.4"/>
+          <path d="M182 618 L177 621 M182 618 L179 623" stroke-width="1.4"/>
+          <path d="M188 620 L183 623 M188 620 L185 625" stroke-width="1.4"/>
+        </g>
+        <text x="96" y="676" class="m" font-size="12" fill="#555">IN1</text>
+        <line x1="150" y1="680" x2="150" y2="740" stroke="#000" stroke-width="2"/>
+
+        <!-- ======= Pfad 2: Transistorausgang Kanal 1 ======= -->
+        <g stroke="#000" stroke-width="2" fill="none" stroke-dasharray="8 5">
+          <line x1="330" y1="200" x2="330" y2="530"/>
+        </g>
+        <text x="344" y="196" class="m" font-size="15">nach Blatt 3 / Pfad 1</text>
+        <text x="344" y="216" class="m" font-size="13" fill="#555">-X2:1 → -A1 GPIO17</text>
+        <rect x="268" y="530" width="124" height="150" fill="#fff" stroke="#000" stroke-width="2"/>
+        <text x="276" y="552" class="bmk" font-size="16">-A2</text>
+        <text x="276" y="570" font-size="13">Kanal 1</text>
+        <!-- Fototransistor -->
+        <g stroke="#000" stroke-width="2" fill="none">
+          <line x1="330" y1="580" x2="330" y2="600"/>
+          <line x1="312" y1="600" x2="312" y2="640"/>
+          <line x1="312" y1="610" x2="330" y2="600"/>
+          <line x1="312" y1="630" x2="330" y2="640"/>
+          <path d="M324 632 L330 640 L322 641 Z" fill="#000" stroke="none"/>
+          <line x1="330" y1="640" x2="330" y2="660"/>
+          <path d="M296 592 L282 578 M290 598 L276 584" stroke-width="1.4"/>
+          <path d="M296 592 L291 589 M296 592 L293 587" stroke-width="1.4"/>
+          <path d="M290 598 L285 595 M290 598 L287 593" stroke-width="1.4"/>
+        </g>
+        <text x="276" y="676" class="m" font-size="12" fill="#555">OUT1 · open collector</text>
+        <line x1="330" y1="660" x2="330" y2="740" stroke="#000" stroke-width="2" stroke-dasharray="8 5"/>
+        <text x="344" y="712" class="m" font-size="13" fill="#555">Bezug: -A1 GND (Kreis G1)</text>
+
+        <!-- ======= Kanal 2: Pfad 3 ======= -->
+        <g stroke="#000" stroke-width="2" fill="none">
+          <line x1="510" y1="140" x2="510" y2="200"/>
+        </g>
+        <circle cx="510" cy="216" r="11" fill="#fff" stroke="#000" stroke-width="2"/>
+        <text x="532" y="212" class="m" font-size="15">-X1:3</text>
+        <text x="532" y="230" class="m" font-size="13" fill="#555">+5 V auf S0+</text>
+        <line x1="510" y1="227" x2="510" y2="290" stroke="#000" stroke-width="2"/>
+
+        <rect x="448" y="290" width="124" height="120" fill="#fff" stroke="#000" stroke-width="2" stroke-dasharray="7 4"/>
+        <text x="456" y="312" class="bmk" font-size="16">-B2</text>
+        <text x="456" y="330" font-size="13">Zähler OG</text>
+        <g stroke="#000" stroke-width="2" fill="none">
+          <line x1="510" y1="330" x2="510" y2="350"/>
+          <circle cx="510" cy="352" r="3.4" fill="#000"/>
+          <line x1="510" y1="352" x2="532" y2="382"/>
+          <circle cx="510" cy="386" r="3.4" fill="#000"/>
+          <line x1="510" y1="386" x2="510" y2="410"/>
+        </g>
+        <text x="542" y="360" class="m" font-size="13" fill="#555">S0-Ausgang</text>
+        <text x="456" y="404" class="m" font-size="12" fill="#555">max. 20 mA</text>
+
+        <line x1="510" y1="410" x2="510" y2="452" stroke="#000" stroke-width="2"/>
+        <circle cx="510" cy="468" r="11" fill="#fff" stroke="#000" stroke-width="2"/>
+        <text x="532" y="464" class="m" font-size="15">-X1:4</text>
+        <text x="532" y="482" class="m" font-size="13" fill="#555">Rückführung S0−</text>
+        <line x1="510" y1="479" x2="510" y2="530" stroke="#000" stroke-width="2"/>
+
+        <rect x="448" y="530" width="124" height="150" fill="#fff" stroke="#000" stroke-width="2"/>
+        <text x="456" y="552" class="bmk" font-size="16">-A2</text>
+        <text x="456" y="570" font-size="13">Kanal 2</text>
+        <rect x="496" y="580" width="28" height="42" fill="#fff" stroke="#000" stroke-width="2"/>
+        <text x="532" y="606" class="m" font-size="13" fill="#555">-R2 intern</text>
+        <line x1="510" y1="570" x2="510" y2="580" stroke="#000" stroke-width="2"/>
+        <line x1="510" y1="622" x2="510" y2="636" stroke="#000" stroke-width="2"/>
+        <g stroke="#000" stroke-width="2" fill="none">
+          <path d="M496 636 L524 636 M510 636 L496 660 L524 660 Z" fill="#000"/>
+          <line x1="496" y1="660" x2="524" y2="660"/>
+          <line x1="510" y1="660" x2="510" y2="680"/>
+          <path d="M528 632 L542 618 M534 634 L548 620" stroke-width="1.4"/>
+          <path d="M542 618 L537 621 M542 618 L539 623" stroke-width="1.4"/>
+          <path d="M548 620 L543 623 M548 620 L545 625" stroke-width="1.4"/>
+        </g>
+        <text x="456" y="676" class="m" font-size="12" fill="#555">IN2</text>
+        <line x1="510" y1="680" x2="510" y2="740" stroke="#000" stroke-width="2"/>
+
+        <!-- ======= Pfad 4 ======= -->
+        <g stroke="#000" stroke-width="2" fill="none" stroke-dasharray="8 5">
+          <line x1="690" y1="200" x2="690" y2="530"/>
+        </g>
+        <text x="704" y="196" class="m" font-size="15">nach Blatt 3 / Pfad 2</text>
+        <text x="704" y="216" class="m" font-size="13" fill="#555">-X2:2 → -A1 GPIO27</text>
+        <rect x="628" y="530" width="124" height="150" fill="#fff" stroke="#000" stroke-width="2"/>
+        <text x="636" y="552" class="bmk" font-size="16">-A2</text>
+        <text x="636" y="570" font-size="13">Kanal 2</text>
+        <g stroke="#000" stroke-width="2" fill="none">
+          <line x1="690" y1="580" x2="690" y2="600"/>
+          <line x1="672" y1="600" x2="672" y2="640"/>
+          <line x1="672" y1="610" x2="690" y2="600"/>
+          <line x1="672" y1="630" x2="690" y2="640"/>
+          <path d="M684 632 L690 640 L682 641 Z" fill="#000" stroke="none"/>
+          <line x1="690" y1="640" x2="690" y2="660"/>
+          <path d="M656 592 L642 578 M650 598 L636 584" stroke-width="1.4"/>
+          <path d="M656 592 L651 589 M656 592 L653 587" stroke-width="1.4"/>
+          <path d="M650 598 L645 595 M650 598 L647 593" stroke-width="1.4"/>
+        </g>
+        <text x="636" y="676" class="m" font-size="12" fill="#555">OUT2 · open collector</text>
+        <line x1="690" y1="660" x2="690" y2="740" stroke="#000" stroke-width="2" stroke-dasharray="8 5"/>
+
+        <!-- ======= Kanal 3: Pfad 5 ======= -->
+        <g stroke="#000" stroke-width="2" fill="none">
+          <line x1="870" y1="140" x2="870" y2="200"/>
+        </g>
+        <circle cx="870" cy="216" r="11" fill="#fff" stroke="#000" stroke-width="2"/>
+        <text x="892" y="212" class="m" font-size="15">-X1:5</text>
+        <text x="892" y="230" class="m" font-size="13" fill="#555">+5 V auf S0+</text>
+        <line x1="870" y1="227" x2="870" y2="290" stroke="#000" stroke-width="2"/>
+
+        <rect x="808" y="290" width="124" height="120" fill="#fff" stroke="#000" stroke-width="2" stroke-dasharray="7 4"/>
+        <text x="816" y="312" class="bmk" font-size="16">-B3</text>
+        <text x="816" y="330" font-size="13">Zähler DG</text>
+        <g stroke="#000" stroke-width="2" fill="none">
+          <line x1="870" y1="330" x2="870" y2="350"/>
+          <circle cx="870" cy="352" r="3.4" fill="#000"/>
+          <line x1="870" y1="352" x2="892" y2="382"/>
+          <circle cx="870" cy="386" r="3.4" fill="#000"/>
+          <line x1="870" y1="386" x2="870" y2="410"/>
+        </g>
+        <text x="902" y="360" class="m" font-size="13" fill="#555">S0-Ausgang</text>
+        <text x="816" y="404" class="m" font-size="12" fill="#555">max. 20 mA</text>
+
+        <line x1="870" y1="410" x2="870" y2="452" stroke="#000" stroke-width="2"/>
+        <circle cx="870" cy="468" r="11" fill="#fff" stroke="#000" stroke-width="2"/>
+        <text x="892" y="464" class="m" font-size="15">-X1:6</text>
+        <text x="892" y="482" class="m" font-size="13" fill="#555">Rückführung S0−</text>
+        <line x1="870" y1="479" x2="870" y2="530" stroke="#000" stroke-width="2"/>
+
+        <rect x="808" y="530" width="124" height="150" fill="#fff" stroke="#000" stroke-width="2"/>
+        <text x="816" y="552" class="bmk" font-size="16">-A2</text>
+        <text x="816" y="570" font-size="13">Kanal 3</text>
+        <rect x="856" y="580" width="28" height="42" fill="#fff" stroke="#000" stroke-width="2"/>
+        <text x="892" y="606" class="m" font-size="13" fill="#555">-R3 intern</text>
+        <line x1="870" y1="570" x2="870" y2="580" stroke="#000" stroke-width="2"/>
+        <line x1="870" y1="622" x2="870" y2="636" stroke="#000" stroke-width="2"/>
+        <g stroke="#000" stroke-width="2" fill="none">
+          <path d="M856 636 L884 636 M870 636 L856 660 L884 660 Z" fill="#000"/>
+          <line x1="856" y1="660" x2="884" y2="660"/>
+          <line x1="870" y1="660" x2="870" y2="680"/>
+          <path d="M888 632 L902 618 M894 634 L908 620" stroke-width="1.4"/>
+          <path d="M902 618 L897 621 M902 618 L899 623" stroke-width="1.4"/>
+          <path d="M908 620 L903 623 M908 620 L905 625" stroke-width="1.4"/>
+        </g>
+        <text x="816" y="676" class="m" font-size="12" fill="#555">IN3</text>
+        <line x1="870" y1="680" x2="870" y2="740" stroke="#000" stroke-width="2"/>
+
+        <!-- ======= Pfad 6 ======= -->
+        <g stroke="#000" stroke-width="2" fill="none" stroke-dasharray="8 5">
+          <line x1="1050" y1="200" x2="1050" y2="530"/>
+        </g>
+        <text x="1064" y="196" class="m" font-size="15">nach Blatt 3 / Pfad 3</text>
+        <text x="1064" y="216" class="m" font-size="13" fill="#555">-X2:3 → -A1 GPIO22</text>
+        <rect x="988" y="530" width="124" height="150" fill="#fff" stroke="#000" stroke-width="2"/>
+        <text x="996" y="552" class="bmk" font-size="16">-A2</text>
+        <text x="996" y="570" font-size="13">Kanal 3</text>
+        <g stroke="#000" stroke-width="2" fill="none">
+          <line x1="1050" y1="580" x2="1050" y2="600"/>
+          <line x1="1032" y1="600" x2="1032" y2="640"/>
+          <line x1="1032" y1="610" x2="1050" y2="600"/>
+          <line x1="1032" y1="630" x2="1050" y2="640"/>
+          <path d="M1044 632 L1050 640 L1042 641 Z" fill="#000" stroke="none"/>
+          <line x1="1050" y1="640" x2="1050" y2="660"/>
+          <path d="M1016 592 L1002 578 M1010 598 L996 584" stroke-width="1.4"/>
+          <path d="M1016 592 L1011 589 M1016 592 L1013 587" stroke-width="1.4"/>
+          <path d="M1010 598 L1005 595 M1010 598 L1007 593" stroke-width="1.4"/>
+        </g>
+        <text x="996" y="676" class="m" font-size="12" fill="#555">OUT3 · open collector</text>
+        <line x1="1050" y1="660" x2="1050" y2="740" stroke="#000" stroke-width="2" stroke-dasharray="8 5"/>
+
+        <!-- ======= Pfad 7: Speisung G2 mit F1 ======= -->
+        <g stroke="#000" stroke-width="2" fill="none">
+          <line x1="1290" y1="140" x2="1290" y2="240"/>
+        </g>
+        <!-- Sicherung F1 -->
+        <rect x="1268" y="240" width="44" height="76" fill="#fff" stroke="#000" stroke-width="2"/>
+        <line x1="1290" y1="240" x2="1290" y2="316" stroke="#000" stroke-width="2"/>
+        <text x="1324" y="272" class="bmk" font-size="16">-F1</text>
+        <text x="1324" y="292" class="m" font-size="14">100 mA träge · Pflicht</text>
+        <text x="1324" y="310" class="m" font-size="13" fill="#a00">-G2 begrenzt nicht</text>
+        <line x1="1290" y1="316" x2="1290" y2="420" stroke="#000" stroke-width="2"/>
+
+        <!-- Netzteil G2 -->
+        <rect x="1218" y="420" width="144" height="130" fill="#fff" stroke="#000" stroke-width="2"/>
+        <text x="1230" y="446" class="bmk" font-size="17">-G2</text>
+        <text x="1230" y="468" font-size="14">5 V DC · 5 A</text>
+        <text x="1230" y="488" class="m" font-size="13" fill="#555">SELV</text>
+        <text x="1230" y="512" class="m" font-size="13" fill="#555">Nicht aus -G1</text>
+        <text x="1230" y="530" class="m" font-size="13" fill="#555">speisen!</text>
+        <line x1="1290" y1="550" x2="1290" y2="620" stroke="#000" stroke-width="2"/>
+        <circle cx="1290" cy="636" r="11" fill="#fff" stroke="#000" stroke-width="2"/>
+        <text x="1312" y="632" class="m" font-size="15">-X1:7</text>
+        <text x="1312" y="650" class="m" font-size="13" fill="#555">0 V Sammelklemme</text>
+        <line x1="1290" y1="647" x2="1290" y2="740" stroke="#000" stroke-width="2"/>
+
+        <!-- Hinweisblock -->
+        <g>
+          <rect x="40" y="800" width="1000" height="46" fill="#f0f0f0" stroke="#000" stroke-width="1"/>
+          <text x="54" y="819" class="m" font-size="13"><tspan font-weight="bold">Hinweis:</tspan> Die Strompfade 2, 4 und 6 gehören elektrisch zum Kreis G1 und sind hier nur zur</text>
+          <text x="54" y="837" class="m" font-size="13">Zuordnung gestrichelt dargestellt. Ausführung siehe Blatt 3, Adern siehe Blatt 6.</text>
+        </g>
+        <g>
+          <rect x="1060" y="800" width="460" height="46" fill="#fff" stroke="#000" stroke-width="2.2"/>
+          <text x="1074" y="819" class="m" font-size="13" font-weight="bold">0 V hier und GND auf Blatt 3 sind nicht verbunden.</text>
+          <text x="1074" y="837" class="m" font-size="13" font-weight="bold">GND-Brücke auf -A2 muss offen sein — siehe Blatt 6.</text>
+        </g>
+      </svg>
+    </div>
+
+    <div class="schriftfeld">
+      <div class="z"><span class="lbl">Anlage / Benennung</span><span class="val gross">S0-Erfassung 3 WE</span></div>
+      <div class="z"><span class="lbl">Blattart</span><span class="val">Stromlaufplan</span></div>
+      <div class="z"><span class="lbl">Blatt</span><span class="val">2 von 11</span></div>
+      <div class="z"><span class="lbl">Erstellt</span><span class="val">06.08.2026</span></div>
+      <div class="z"><span class="lbl">Änderung</span><span class="val">—</span></div>
+
+      <div class="z"><span class="lbl">Anlagenkennzeichen</span><span class="val">=S0</span></div>
+      <div class="z"><span class="lbl">Ort</span><span class="val">+ZS Zählerschrank</span></div>
+      <div class="z"><span class="lbl">Format</span><span class="val">A3</span></div>
+      <div class="z"><span class="lbl">Maßstab</span><span class="val">ohne</span></div>
+      <div class="z"><span class="lbl">Index</span><span class="val">a</span></div>
+
+      <div class="z"><span class="lbl">Kennzeichnung</span><span class="val">DIN EN 81346-2</span></div>
+      <div class="z"><span class="lbl">Darstellung</span><span class="val">IEC 60617</span></div>
+      <div class="z"><span class="lbl">Strompfade</span><span class="val">1…7</span></div>
+      <div class="z"><span class="lbl">Kreis</span><span class="val">G2 · 5 V SELV</span></div>
+      <div class="z"><span class="lbl">Sprache</span><span class="val">de</span></div>
+
+      <div class="z" style="grid-column: 1 / span 2;"><span class="lbl">Blattinhalt</span><span class="val lang">S0-Stromschleife der Zähler -B1…-B3 auf die Eingangsseite von -A2</span></div>
+      <div class="z" style="grid-column: 3 / span 3;"><span class="lbl">Querverweis</span><span class="val lang">Ausgangsseite -A2 → Blatt 3 · Klemmen -X1 → Blatt 4</span></div>
+
+      <div class="z sf-nobottom" style="grid-column: 1 / span 2;"><span class="lbl">Sicherheitshinweis</span><span class="val lang">Nur durch Elektrofachkraft (DIN VDE 1000-10); Zählerplatz und Inbetriebsetzung nur durch eingetragenes Installationsunternehmen (§ 13, § 14 NAV); HAK nur Netzbetreiber. Arbeiten am Zähler betreffen die NS-Hauptverteilung: freischalten, sichern, Spannungsfreiheit feststellen, erden und kurzschließen, benachbarte Teile abdecken</span></div>
+      <div class="z sf-nobottom" style="grid-column: 3 / span 2;"><span class="lbl">Zeichnungsnummer</span><span class="val lang">S0-2026-002</span></div>
+      <div class="z sf-nobottom sf-noright"><span class="lbl">Ersetzt</span><span class="val">—</span></div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════
+     BLATT 3  —  Strompfadplan Rechnereinheit / Anzeige
+     ════════════════════════════════════════════════════════════ -->
+<section class="blatt">
+  <div class="rahmen"></div>
+  <div class="feld">
+
+    <div class="kopf">
+      <span class="nr">= S0 &nbsp;·&nbsp; Blatt 3</span>
+      <h1>Stromlaufplan — Rechnereinheit</h1>
+      <span class="sub">Kreis G1 · Strompfade 1…4</span>
+    </div>
+
+    <div class="zeichnung">
+      <svg viewBox="0 0 960 884" preserveAspectRatio="xMidYMid meet" role="img"
+           aria-label="Strompfadplan der Ausgangsseite. Die Pfade 1 bis 3 führen die Transistorausgänge des Optokopplers A2 über die Klemmen X2 auf die GPIO-Eingänge 17, 27 und 22 der Rechnereinheit A1; jeder Eingang nutzt den internen Pull-up gegen 3,3 Volt. Pfad 4 ist die Speisung der Rechnereinheit aus dem Netzteil G1 über das Micro-USB-Kabel W7.">
+
+        <!-- Pfadraster -->
+        <g stroke="#000" stroke-width="0.8" stroke-dasharray="3 5" opacity="0.45">
+          <line x1="130" y1="86" x2="130" y2="782"/>
+          <line x1="300" y1="86" x2="300" y2="782"/>
+          <line x1="470" y1="86" x2="470" y2="782"/>
+          <line x1="810" y1="86" x2="810" y2="782"/>
+        </g>
+        <g class="m" font-size="19" text-anchor="middle" font-weight="bold">
+          <text x="130" y="72">1</text>
+          <text x="300" y="72">2</text>
+          <text x="470" y="72">3</text>
+          <text x="810" y="72">4</text>
+        </g>
+        <line x1="40" y1="84" x2="920" y2="84" stroke="#000" stroke-width="1"/>
+        <g class="m" font-size="14" fill="#555" text-anchor="middle">
+          <text x="300" y="790">Impulseingänge · Kreis G1</text>
+          <text x="810" y="790">Speisung</text>
+        </g>
+
+        <!-- Potentialschienen Kreis G1 -->
+        <line x1="40" y1="140" x2="900" y2="140" stroke="#000" stroke-width="3.4"/>
+        <line x1="40" y1="740" x2="900" y2="740" stroke="#000" stroke-width="3.4"/>
+        <text x="46" y="130" class="m" font-size="18" font-weight="bold">+3,3 V &nbsp;— intern -A1, Pin 1 &nbsp;(Pull-up softwareseitig)</text>
+        <text x="46" y="768" class="m" font-size="18" font-weight="bold">GND &nbsp;/&nbsp; -A1 Pin 6, 20 &nbsp;— Bezugspotential Kreis G1</text>
+
+        <!-- ===== Pfad 1: GPIO17 ===== -->
+        <g stroke="#000" stroke-width="2" fill="none">
+          <line x1="130" y1="140" x2="130" y2="200"/>
+        </g>
+        <!-- interner Pull-up -->
+        <rect x="108" y="200" width="44" height="70" fill="#fff" stroke="#000" stroke-width="2" stroke-dasharray="5 3"/>
+        <text x="162" y="230" class="m" font-size="13" fill="#555">Pull-up intern</text>
+        <text x="162" y="248" class="m" font-size="13" fill="#555">pull_up=True</text>
+        <line x1="130" y1="270" x2="130" y2="320" stroke="#000" stroke-width="2"/>
+        <!-- GPIO-Eingang -->
+        <rect x="68" y="320" width="124" height="86" fill="#fff" stroke="#000" stroke-width="2"/>
+        <text x="76" y="342" class="bmk" font-size="16">-A1</text>
+        <text x="76" y="362" class="m" font-size="14">Pin 11</text>
+        <text x="76" y="382" class="m" font-size="14">GPIO17</text>
+        <text x="76" y="400" class="m" font-size="12" fill="#555">Eingang, aktiv LOW</text>
+        <line x1="130" y1="406" x2="130" y2="470" stroke="#000" stroke-width="2"/>
+        <!-- Klemme X2:1 -->
+        <circle cx="130" cy="486" r="11" fill="#fff" stroke="#000" stroke-width="2"/>
+        <text x="152" y="482" class="m" font-size="15">-X2:1</text>
+        <line x1="130" y1="497" x2="130" y2="560" stroke="#000" stroke-width="2"/>
+        <!-- A2 Ausgang -->
+        <rect x="68" y="560" width="124" height="130" fill="#fff" stroke="#000" stroke-width="2"/>
+        <text x="76" y="582" class="bmk" font-size="16">-A2</text>
+        <text x="76" y="600" font-size="13">OUT1</text>
+        <g stroke="#000" stroke-width="2" fill="none">
+          <line x1="130" y1="606" x2="130" y2="624"/>
+          <line x1="112" y1="624" x2="112" y2="662"/>
+          <line x1="112" y1="633" x2="130" y2="624"/>
+          <line x1="112" y1="653" x2="130" y2="662"/>
+          <path d="M124 654 L130 662 L122 663 Z" fill="#000" stroke="none"/>
+          <line x1="130" y1="662" x2="130" y2="682"/>
+          <path d="M96 616 L82 602 M90 622 L76 608" stroke-width="1.4"/>
+          <path d="M96 616 L91 613 M96 616 L93 611" stroke-width="1.4"/>
+          <path d="M90 622 L85 619 M90 622 L87 617" stroke-width="1.4"/>
+        </g>
+        <text x="76" y="686" class="m" font-size="12" fill="#555">von Blatt 2 / Pfad 2</text>
+        <line x1="130" y1="690" x2="130" y2="740" stroke="#000" stroke-width="2"/>
+
+        <!-- ===== Pfad 2: GPIO27 ===== -->
+        <g stroke="#000" stroke-width="2" fill="none">
+          <line x1="300" y1="140" x2="300" y2="200"/>
+        </g>
+        <rect x="278" y="200" width="44" height="70" fill="#fff" stroke="#000" stroke-width="2" stroke-dasharray="5 3"/>
+        <line x1="300" y1="270" x2="300" y2="320" stroke="#000" stroke-width="2"/>
+        <rect x="238" y="320" width="124" height="86" fill="#fff" stroke="#000" stroke-width="2"/>
+        <text x="246" y="342" class="bmk" font-size="16">-A1</text>
+        <text x="246" y="362" class="m" font-size="14">Pin 13</text>
+        <text x="246" y="382" class="m" font-size="14">GPIO27</text>
+        <text x="246" y="400" class="m" font-size="12" fill="#555">Eingang, aktiv LOW</text>
+        <line x1="300" y1="406" x2="300" y2="470" stroke="#000" stroke-width="2"/>
+        <circle cx="300" cy="486" r="11" fill="#fff" stroke="#000" stroke-width="2"/>
+        <text x="322" y="482" class="m" font-size="15">-X2:2</text>
+        <line x1="300" y1="497" x2="300" y2="560" stroke="#000" stroke-width="2"/>
+        <rect x="238" y="560" width="124" height="130" fill="#fff" stroke="#000" stroke-width="2"/>
+        <text x="246" y="582" class="bmk" font-size="16">-A2</text>
+        <text x="246" y="600" font-size="13">OUT2</text>
+        <g stroke="#000" stroke-width="2" fill="none">
+          <line x1="300" y1="606" x2="300" y2="624"/>
+          <line x1="282" y1="624" x2="282" y2="662"/>
+          <line x1="282" y1="633" x2="300" y2="624"/>
+          <line x1="282" y1="653" x2="300" y2="662"/>
+          <path d="M294 654 L300 662 L292 663 Z" fill="#000" stroke="none"/>
+          <line x1="300" y1="662" x2="300" y2="682"/>
+          <path d="M266 616 L252 602 M260 622 L246 608" stroke-width="1.4"/>
+          <path d="M266 616 L261 613 M266 616 L263 611" stroke-width="1.4"/>
+          <path d="M260 622 L255 619 M260 622 L257 617" stroke-width="1.4"/>
+        </g>
+        <text x="246" y="686" class="m" font-size="12" fill="#555">von Blatt 2 / Pfad 4</text>
+        <line x1="300" y1="690" x2="300" y2="740" stroke="#000" stroke-width="2"/>
+
+        <!-- ===== Pfad 3: GPIO22 ===== -->
+        <g stroke="#000" stroke-width="2" fill="none">
+          <line x1="470" y1="140" x2="470" y2="200"/>
+        </g>
+        <rect x="448" y="200" width="44" height="70" fill="#fff" stroke="#000" stroke-width="2" stroke-dasharray="5 3"/>
+        <line x1="470" y1="270" x2="470" y2="320" stroke="#000" stroke-width="2"/>
+        <rect x="408" y="320" width="124" height="86" fill="#fff" stroke="#000" stroke-width="2"/>
+        <text x="416" y="342" class="bmk" font-size="16">-A1</text>
+        <text x="416" y="362" class="m" font-size="14">Pin 15</text>
+        <text x="416" y="382" class="m" font-size="14">GPIO22</text>
+        <text x="416" y="400" class="m" font-size="12" fill="#555">Eingang, aktiv LOW</text>
+        <line x1="470" y1="406" x2="470" y2="470" stroke="#000" stroke-width="2"/>
+        <circle cx="470" cy="486" r="11" fill="#fff" stroke="#000" stroke-width="2"/>
+        <text x="492" y="482" class="m" font-size="15">-X2:3</text>
+        <line x1="470" y1="497" x2="470" y2="560" stroke="#000" stroke-width="2"/>
+        <rect x="408" y="560" width="124" height="130" fill="#fff" stroke="#000" stroke-width="2"/>
+        <text x="416" y="582" class="bmk" font-size="16">-A2</text>
+        <text x="416" y="600" font-size="13">OUT3</text>
+        <g stroke="#000" stroke-width="2" fill="none">
+          <line x1="470" y1="606" x2="470" y2="624"/>
+          <line x1="452" y1="624" x2="452" y2="662"/>
+          <line x1="452" y1="633" x2="470" y2="624"/>
+          <line x1="452" y1="653" x2="470" y2="662"/>
+          <path d="M464 654 L470 662 L462 663 Z" fill="#000" stroke="none"/>
+          <line x1="470" y1="662" x2="470" y2="682"/>
+          <path d="M436 616 L422 602 M430 622 L416 608" stroke-width="1.4"/>
+          <path d="M436 616 L431 613 M436 616 L433 611" stroke-width="1.4"/>
+          <path d="M430 622 L425 619 M430 622 L427 617" stroke-width="1.4"/>
+        </g>
+        <text x="416" y="686" class="m" font-size="12" fill="#555">von Blatt 2 / Pfad 6</text>
+        <line x1="470" y1="690" x2="470" y2="740" stroke="#000" stroke-width="2"/>
+
+        <!-- ===== Pfad 4: Speisung G1 ===== -->
+        <g stroke="#000" stroke-width="2" fill="none">
+          <line x1="810" y1="140" x2="810" y2="240"/>
+        </g>
+        <text x="826" y="180" class="m" font-size="14" fill="#555">3,3 V erzeugt -A1 intern</text>
+        <rect x="748" y="240" width="150" height="130" fill="#fff" stroke="#000" stroke-width="2"/>
+        <text x="758" y="266" class="bmk" font-size="17">-A1</text>
+        <text x="758" y="288" font-size="14">Raspberry Pi 3B</text>
+        <text x="758" y="310" class="m" font-size="13" fill="#555">Speisung 5 V über µUSB</text>
+        <text x="758" y="330" class="m" font-size="13" fill="#555">GPIO 2/4/6 unbelegt</text>
+        <line x1="810" y1="370" x2="810" y2="470" stroke="#000" stroke-width="2"/>
+        <!-- W7 Micro-USB-Kabel -->
+        <text x="826" y="424" class="m" font-size="13" fill="#555">W7 · µUSB ≥ 0,35 mm²</text>
+        <rect x="748" y="470" width="150" height="110" fill="#fff" stroke="#000" stroke-width="2"/>
+        <text x="758" y="496" class="bmk" font-size="17">-G1</text>
+        <text x="758" y="518" font-size="14">5 V DC · 5 A</text>
+        <text x="758" y="540" class="m" font-size="13" fill="#555">Pi 3B bis 2,5 A</text>
+        <text x="758" y="558" class="m" font-size="13" fill="#555">speist ausschließlich -A1</text>
+        <line x1="810" y1="580" x2="810" y2="740" stroke="#000" stroke-width="2"/>
+
+        <!-- Hinweisblock -->
+        <g>
+          <rect x="40" y="800" width="500" height="46" fill="#f0f0f0" stroke="#000" stroke-width="1"/>
+          <text x="54" y="819" class="m" font-size="12"><tspan font-weight="bold">Hinweis:</tspan> -X2:5 nur belegen, wenn -A2 einen eigenen VCC fordert.</text>
+          <text x="54" y="837" class="m" font-size="12">Bei Open-Collector genügt der interne Pull-up. Adern siehe Blatt 6.</text>
+        </g>
+        <g>
+          <rect x="560" y="800" width="360" height="46" fill="#fff" stroke="#000" stroke-width="2.2"/>
+          <text x="574" y="819" class="m" font-size="13" font-weight="bold">Niemals 5 V, 12 V oder 24 V an einen GPIO.</text>
+          <text x="574" y="837" class="m" font-size="12">Vor dem Anschluss OUT1…OUT3 gegen -A1 GND messen: max. 3,3 V.</text>
+        </g>
+      </svg>
+    </div>
+
+    <div class="schriftfeld">
+      <div class="z"><span class="lbl">Anlage / Benennung</span><span class="val gross">S0-Erfassung 3 WE</span></div>
+      <div class="z"><span class="lbl">Blattart</span><span class="val">Stromlaufplan</span></div>
+      <div class="z"><span class="lbl">Blatt</span><span class="val">3 von 11</span></div>
+      <div class="z"><span class="lbl">Erstellt</span><span class="val">06.08.2026</span></div>
+      <div class="z"><span class="lbl">Änderung</span><span class="val">—</span></div>
+
+      <div class="z"><span class="lbl">Anlagenkennzeichen</span><span class="val">=S0</span></div>
+      <div class="z"><span class="lbl">Ort</span><span class="val">+HWR</span></div>
+      <div class="z"><span class="lbl">Format</span><span class="val">A3</span></div>
+      <div class="z"><span class="lbl">Maßstab</span><span class="val">ohne</span></div>
+      <div class="z"><span class="lbl">Index</span><span class="val">a</span></div>
+
+      <div class="z"><span class="lbl">Kennzeichnung</span><span class="val">DIN EN 81346-2</span></div>
+      <div class="z"><span class="lbl">Darstellung</span><span class="val">IEC 60617</span></div>
+      <div class="z"><span class="lbl">Strompfade</span><span class="val">1…4</span></div>
+      <div class="z"><span class="lbl">Kreise</span><span class="val">G1</span></div>
+      <div class="z"><span class="lbl">Sprache</span><span class="val">de</span></div>
+
+      <div class="z" style="grid-column: 1 / span 2;"><span class="lbl">Blattinhalt</span><span class="val lang">Impulseingänge und Speisung der Rechnereinheit</span></div>
+      <div class="z" style="grid-column: 3 / span 3;"><span class="lbl">Querverweis</span><span class="val lang">Eingangsseite -A2 → Blatt 2 · Klemmen -X2 → Blatt 4</span></div>
+
+      <div class="z sf-nobottom" style="grid-column: 1 / span 2;"><span class="lbl">Sicherheitshinweis</span><span class="val lang">GND dieses Blattes ist nicht mit der 0-V-Schiene aus Blatt 2 verbunden — eine gemeinsame Masse hebt die Trennung durch -A2 auf</span></div>
+      <div class="z sf-nobottom" style="grid-column: 3 / span 2;"><span class="lbl">Zeichnungsnummer</span><span class="val lang">S0-2026-003</span></div>
+      <div class="z sf-nobottom sf-noright"><span class="lbl">Ersetzt</span><span class="val">—</span></div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════
+     BLATT 4  —  Klemmenpläne
+     ════════════════════════════════════════════════════════════ -->
+<section class="blatt">
+  <div class="rahmen"></div>
+  <div class="feld">
+
+    <div class="kopf">
+      <span class="nr">= S0 &nbsp;·&nbsp; Blatt 4</span>
+      <h1>Klemmenpläne -X1 und -X2</h1>
+      <span class="sub">Klemmenbelegung · Adern · Querverweise · Leitungen siehe Blatt 5</span>
+    </div>
+
+    <div class="textflaeche zwei">
+
+      <h2 class="abschnitt">-X1 · S0-Eingangsseite, Kreis G2</h2>
+      <p>Der S0-Ausgang des Zählers wirkt als Schalter in der 5-V-Stromschleife.
+      -X1 ist die <strong>Ortsgrenze</strong>: hier endet die Leitung W1 aus dem
+      Zählerschrank (+ZS), alles dahinter ist Schrankverdrahtung im neuen Schrank
+      (+HWR).</p>
+      <table class="liste">
+        <thead><tr><th>Klemme</th><th>Ader</th><th>Von</th><th>Nach</th><th>Paar in W1</th><th>Pfad</th></tr></thead>
+        <tbody>
+          <tr><td class="k">X1:1</td><td>+5 V</td><td class="m">-G2 (+)</td><td class="m">-B1 S0+</td><td class="m">1 · or/weiß</td><td class="m">Bl.2/1</td></tr>
+          <tr><td class="k">X1:2</td><td>Rückführung</td><td class="m">-B1 S0−</td><td class="m">-A2 IN1+</td><td class="m">1 · orange</td><td class="m">Bl.2/1</td></tr>
+          <tr><td class="k">X1:3</td><td>+5 V</td><td class="m">-G2 (+)</td><td class="m">-B2 S0+</td><td class="m">2 · gn/weiß</td><td class="m">Bl.2/3</td></tr>
+          <tr><td class="k">X1:4</td><td>Rückführung</td><td class="m">-B2 S0−</td><td class="m">-A2 IN2+</td><td class="m">2 · grün</td><td class="m">Bl.2/3</td></tr>
+          <tr><td class="k">X1:5</td><td>+5 V</td><td class="m">-G2 (+)</td><td class="m">-B3 S0+</td><td class="m">3 · br/weiß</td><td class="m">Bl.2/5</td></tr>
+          <tr><td class="k">X1:6</td><td>Rückführung</td><td class="m">-B3 S0−</td><td class="m">-A2 IN3+</td><td class="m">3 · braun</td><td class="m">Bl.2/5</td></tr>
+          <tr><td class="k">X1:7</td><td>0 V</td><td class="m">-G2 (−)</td><td class="m">-A2 IN1−, IN2−, IN3−</td><td class="m">—</td><td class="m">Bl.2/7</td></tr>
+        </tbody>
+      </table>
+      <p class="hinweis"><strong>W1 ist ein Netzwerk-Verlegekabel, Cat 6, unter 20 m.</strong>
+      Je Zähler ein verdrilltes Paar — <strong>S0+ und S0− desselben Zählers gehören
+      ins selbe Paar</strong>, sonst ist die Verdrillung wirkungslos. Paar 4 (blau)
+      bleibt Reserve, an beiden Enden isoliert. Auf Klemmen auflegen, keine
+      RJ45-Stecker; bei F/UTP den Schirm einseitig auf der Seite von -G2. Getrennt
+      von netzspannungsführenden Leitungen verlegen. Vollständige Adernliste und
+      Begründung auf Blatt 5.</p>
+      <p>Hat die Baugruppe -A2 je Kanal nur einen Eingang INx und einen gemeinsamen
+      Eingangs-GND, entfällt X1:7 als Sammelklemme: die Rückführungen gehen dann
+      direkt auf IN1…IN3, der 0-V-Zweig auf den gemeinsamen Eingangs-GND.</p>
+
+      <h2 class="abschnitt">-X2 · Optokoppler-Ausgang zur Rechnereinheit, Kreis G1</h2>
+      <p>Der Transistorausgang zieht während des Impulses gegen GND — die Auswertung
+      ist deshalb aktiv LOW und nutzt den internen Pull-up des GPIO.</p>
+      <table class="liste">
+        <thead><tr><th>Klemme</th><th>Von -A2</th><th>Nach -A1</th><th>BCM</th><th>Zähler</th><th>Pfad</th></tr></thead>
+        <tbody>
+          <tr><td class="k">X2:1</td><td class="m">OUT1</td><td class="m">Pin 11</td><td class="m">GPIO17</td><td>-B1 · EG</td><td class="m">Bl.3/1</td></tr>
+          <tr><td class="k">X2:2</td><td class="m">OUT2</td><td class="m">Pin 13</td><td class="m">GPIO27</td><td>-B2 · OG</td><td class="m">Bl.3/2</td></tr>
+          <tr><td class="k">X2:3</td><td class="m">OUT3</td><td class="m">Pin 15</td><td class="m">GPIO22</td><td>-B3 · DG</td><td class="m">Bl.3/3</td></tr>
+          <tr><td class="k">X2:4</td><td class="m">Ausg.-GND</td><td class="m">Pin 6</td><td class="m">GND</td><td>—</td><td class="m">Bl.3</td></tr>
+          <tr><td class="k">X2:5</td><td class="m">Ausg.-VCC</td><td class="m">Pin 1</td><td class="m">3,3 V</td><td>nur falls gefordert</td><td class="m">—</td></tr>
+        </tbody>
+      </table>
+      <p class="hinweis"><strong>X2:5 nur belegen, wenn -A2 einen eigenen Ausgangs-VCC
+      benötigt.</strong> Bei reinem Open-Collector-Ausgang bleibt die Klemme frei.
+      Niemals 5 V, 12 V oder 24 V an einen GPIO — vor dem Anschluss die Spannung an
+      OUT1…OUT3 gegen -A1 GND messen, sie darf 3,3 V nicht überschreiten.</p>
+
+      <p>Leitungsübersicht aller Leitungen W1 bis W7: <strong>Blatt 5</strong>.</p>
+
+    </div>
+
+    <div class="schriftfeld">
+      <div class="z"><span class="lbl">Anlage / Benennung</span><span class="val gross">S0-Erfassung 3 WE</span></div>
+      <div class="z"><span class="lbl">Blattart</span><span class="val">Klemmenplan</span></div>
+      <div class="z"><span class="lbl">Blatt</span><span class="val">4 von 11</span></div>
+      <div class="z"><span class="lbl">Erstellt</span><span class="val">06.08.2026</span></div>
+      <div class="z"><span class="lbl">Änderung</span><span class="val">21.08.2026</span></div>
+
+      <div class="z"><span class="lbl">Anlagenkennzeichen</span><span class="val">=S0</span></div>
+      <div class="z"><span class="lbl">Ort</span><span class="val">+ZS / +HWR</span></div>
+      <div class="z"><span class="lbl">Format</span><span class="val">A3</span></div>
+      <div class="z"><span class="lbl">Maßstab</span><span class="val">ohne</span></div>
+      <div class="z"><span class="lbl">Index</span><span class="val">b</span></div>
+
+      <div class="z"><span class="lbl">Kennzeichnung</span><span class="val">DIN EN 81346-2</span></div>
+      <div class="z"><span class="lbl">Klemmenleisten</span><span class="val">-X1 · -X2</span></div>
+      <div class="z"><span class="lbl">Leitungen</span><span class="val">W1 · W7</span></div>
+      <div class="z"><span class="lbl">Kreise</span><span class="val">G1 · G2</span></div>
+      <div class="z"><span class="lbl">Sprache</span><span class="val">de</span></div>
+
+      <div class="z" style="grid-column: 1 / span 2;"><span class="lbl">Blattinhalt</span><span class="val lang">Klemmenbelegung -X1 und -X2 mit Querverweis auf die Strompfade der Blätter 2 und 3</span></div>
+      <div class="z" style="grid-column: 3 / span 3;"><span class="lbl">Querverweis</span><span class="val lang">Strompfade → Blätter 2 und 3 · Adern → Blätter 6 und 7 · Paarzuordnung W1 → Blatt 5</span></div>
+
+      <div class="z sf-nobottom" style="grid-column: 1 / span 2;"><span class="lbl">Hinweis</span><span class="val lang">W1 · ein verdrilltes Paar je Zähler · -X2:5 nur bei Bedarf · S0 getrennt von Netzleitungen</span></div>
+      <div class="z sf-nobottom" style="grid-column: 3 / span 2;"><span class="lbl">Zeichnungsnummer</span><span class="val lang">S0-2026-004</span></div>
+      <div class="z sf-nobottom sf-noright"><span class="lbl">Ersetzt</span><span class="val">—</span></div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════
+     BLATT 5  —  Leitung W1 zwischen den Orten
+     ════════════════════════════════════════════════════════════ -->
+<section class="blatt">
+  <div class="rahmen"></div>
+  <div class="feld">
+
+    <div class="kopf">
+      <span class="nr">= S0 &nbsp;·&nbsp; Blatt 5</span>
+      <h1>W1 — S0-Leitung zwischen Zählerschrank und neuem Schrank</h1>
+      <span class="sub">Netzwerk-Verlegekabel als S0-Leitung · Paarzuordnung · Ausführung und Prüfung</span>
+    </div>
+
+    <div class="textflaeche zwei">
+
+      <h2 class="abschnitt">Was W1 ist</h2>
+      <p>W1 ist die <strong>einzige</strong> Leitung, die die beiden Orte verbindet.
+      Im Zählerschrank <span class="m">+ZS</span> stehen nur die drei Zähler
+      -B1…-B3; alles übrige — beide Netzteile, die Optokopplerbaugruppe -A2, die
+      Rechnereinheit -A1 und sämtliche Klemmenleisten — sitzt im neuen Schrank
+      <span class="m">+HWR</span>. W1 endet dort auf -X1.</p>
+      <table class="liste">
+        <tbody>
+          <tr><td class="k">Ausführung</td><td><strong>Netzwerk-Verlegekabel, Cat 6 oder besser</strong>, U/UTP oder F/UTP, <strong>Volldraht</strong></td></tr>
+          <tr><td class="k">Querschnitt</td><td>AWG 23 bzw. 24 — entspricht 0,25 bzw. 0,20 mm²</td></tr>
+          <tr><td class="k">Länge</td><td>unter 20 m (+ZS → +HWR)</td></tr>
+          <tr><td class="k">Belegung</td><td>drei der vier Paare, <strong>ein Paar je Zähler</strong>; Paar 4 bleibt Reserve</td></tr>
+          <tr><td class="k">Anschluss</td><td>beidseitig auf <strong>Klemmen</strong> — keine RJ45-Stecker</td></tr>
+          <tr><td class="k">Kreis</td><td>G2, 5 V DC SELV, gespeist aus -G2</td></tr>
+        </tbody>
+      </table>
+      <p><strong>Warum ein Netzwerkkabel dafür taugt.</strong> Der S0-Ausgang des
+      DSZ15D ist ein potentialfreier Optokoppler-Kontakt in einer 5-V-Stromschleife;
+      je Kanal fließen 5…15 mA, der Grenzwert des Zählers liegt bei 20 mA. Ein
+      Cat-Kabel ist elektrisch nichts anderes als eine paarig verseilte
+      Steuerleitung — für diese Ströme und Längen ist es reichlich dimensioniert und
+      durch die Verdrillung sogar störfester als eine Flachleitung gleichen
+      Querschnitts.</p>
+
+      <h2 class="abschnitt">Adernliste W1</h2>
+      <table class="liste">
+        <thead><tr><th>Ader</th><th>Paar · Farbe</th><th>Von</th><th>Nach</th><th>Potential</th></tr></thead>
+        <tbody>
+          <tr><td class="k">W1.1</td><td><strong>1</strong> · orange/weiß</td><td class="m">-X1:1</td><td class="m">-B1 S0+ (Kl. 20)</td><td class="m">+5 V</td></tr>
+          <tr><td class="k">W1.2</td><td><strong>1</strong> · orange</td><td class="m">-B1 S0− (Kl. 21)</td><td class="m">-X1:2</td><td class="m">Rückführung EG</td></tr>
+          <tr><td class="k">W1.3</td><td><strong>2</strong> · grün/weiß</td><td class="m">-X1:3</td><td class="m">-B2 S0+ (Kl. 20)</td><td class="m">+5 V</td></tr>
+          <tr><td class="k">W1.4</td><td><strong>2</strong> · grün</td><td class="m">-B2 S0− (Kl. 21)</td><td class="m">-X1:4</td><td class="m">Rückführung OG</td></tr>
+          <tr><td class="k">W1.5</td><td><strong>3</strong> · braun/weiß</td><td class="m">-X1:5</td><td class="m">-B3 S0+ (Kl. 20)</td><td class="m">+5 V</td></tr>
+          <tr><td class="k">W1.6</td><td><strong>3</strong> · braun</td><td class="m">-B3 S0− (Kl. 21)</td><td class="m">-X1:6</td><td class="m">Rückführung DG</td></tr>
+          <tr><td class="k">W1.7</td><td><strong>4</strong> · blau/weiß</td><td class="m">Reserve</td><td class="m">beidseitig isoliert</td><td class="m">—</td></tr>
+          <tr><td class="k">W1.8</td><td><strong>4</strong> · blau</td><td class="m">Reserve</td><td class="m">beidseitig isoliert</td><td class="m">—</td></tr>
+          <tr><td class="k">W1.S</td><td>Schirm, nur F/UTP</td><td class="m">am Zähler frei, isoliert</td><td class="m">-X1 Schirmschiene</td><td class="m">PE</td></tr>
+        </tbody>
+      </table>
+      <p class="hinweis">Die Klemmenbezeichnung <span class="m">20/21</span> am DSZ15D
+      ist <strong>am Gerät zu prüfen</strong> — sie ist hier nicht aus dem Datenblatt
+      belegt, sondern als üblicher S0-Anschluss geführt. Maßgeblich ist der Aufdruck am
+      Zähler. Auf Polung achten: S0+ ist der Anodenanschluss; ein Vertauschen führt
+      dazu, dass kein Impuls erkannt wird — der Kanal bleibt stumm, ohne Fehlermeldung.</p>
+
+      <h2 class="abschnitt">Die Paarzuordnung — hier wird dieses Kabel falsch gemacht</h2>
+      <p><strong>Hin- und Rückleiter desselben Zählers gehören ins selbe verdrillte
+      Paar.</strong> Nur dann umschließen die beiden Leiter eines Kanals dieselbe,
+      praktisch verschwindende Fläche, und eingekoppelte Störungen heben sich auf.</p>
+      <table class="liste">
+        <thead><tr><th>Belegung</th><th>Wirkung</th></tr></thead>
+        <tbody>
+          <tr><td class="k">S0+ und S0− <strong>desselben</strong> Zählers im selben Paar</td><td><strong>Richtig.</strong> Verdrillung wirkt, Störfestigkeit wie bei einer Steuerleitung.</td></tr>
+          <tr><td class="k">Alle drei S0+ in ein Paar, alle Rückführungen ins nächste</td><td><strong>Falsch.</strong> Jeder Kanal spannt eine Schleife mit einem fremden Leiter auf. Das Kabel wirkt wie ein ungeschirmtes Parallelkabel; Störimpulse werden als Zählimpulse erkannt.</td></tr>
+          <tr><td class="k">Adern nach optischer Farbähnlichkeit gegriffen</td><td><strong>Falsch.</strong> Die Paarbildung folgt nicht der Reihenfolge im Kabel, sondern der Farbcodierung — verlässlich nur durch Durchklingeln.</td></tr>
+        </tbody>
+      </table>
+      <p class="hinweis"><strong>Nicht nach Farbe raten, sondern nach Paar.</strong>
+      Die vier Paare eines Cat-Kabels sind orange, grün, braun und blau — jeweils die
+      volle Farbe zusammen mit der zugehörigen weiß-gestreiften Ader. Vor dem Auflegen
+      jedes Paar durchklingeln: <strong>Durchgang darf nur innerhalb eines Paares
+      bestehen</strong>, nicht zwischen Paaren und nicht gegen den Schirm.</p>
+
+      <h2 class="abschnitt">Ausführung — vier Auflagen</h2>
+      <table class="liste">
+        <thead><tr><th>Punkt</th><th>Festlegung</th></tr></thead>
+        <tbody>
+          <tr><td class="k">Keine RJ45-Stecker</td><td>Beide Enden auf Reihen- oder Federklemmen. RJ45-Kontakte sind für dauerhaft anstehenden Kleinsignal-Gleichstrom im Schrank nicht gedacht; ein Steckverbinder mitten in der Strecke ist eine Fehlerquelle, die kein Klemmenplan abbildet. Kein Patchfeld dazwischen.</td></tr>
+          <tr><td class="k">Volldraht, nicht Litze</td><td>Verlegekabel hat starre Adern und hält in Federklemmen. Wird ersatzweise ein Patchkabel verwendet, sind <strong>Aderendhülsen zwingend</strong> — eine aufgesplissene Litze zeigt sich als sporadisch fehlende Impulse und ist praktisch nicht zu finden.</td></tr>
+          <tr><td class="k">Getrennt von 230 V</td><td>Nicht über längere Strecken parallel zu netzspannungsführenden Leitungen im selben Kanal führen. Kreuzen ist unkritisch. Bei gemeinsamer Verlegung wäre die Isolation für die höchste vorkommende Spannung auszulegen — ein Cat-Kabel erfüllt das nicht.</td></tr>
+          <tr><td class="k">Schirm einseitig</td><td>Bei F/UTP den Schirm <strong>nur</strong> auf der Seite von -G2 auflegen (+HWR). Am Zähler bleibt er frei und ist zu isolieren. Beidseitig aufgelegt entsteht eine Erdschleife, die genau die Störungen einträgt, die der Schirm verhindern soll.</td></tr>
+        </tbody>
+      </table>
+      <p class="hinweis"><strong>W1 führt keine Netzwerkdaten.</strong> Das Kabel ist
+      ausschließlich S0-Verdrahtung. Es darf nicht zusätzlich als Ethernet-Leitung
+      genutzt oder in ein Patchfeld gesteckt werden, und aus einem bereits als LAN
+      genutzten Kabel dürfen umgekehrt keine Adern für S0 abgezweigt werden — die
+      Ethernet-Signalpegel lägen dann auf demselben Mantel wie die Zählimpulse.
+      <strong>Beide Enden dauerhaft mit W1 beschriften</strong>, damit es später
+      niemand für ein freies Netzwerkkabel hält und umsteckt.</p>
+
+      <h2 class="abschnitt">Prüfung vor dem Auflegen</h2>
+      <p>Beide Enden frei, Kabel verlegt. Steht als Schritte 1 bis 4 auch auf dem
+      Inbetriebnahmeblatt. <strong>1.</strong> Je Paar volle Farbe gegen
+      weiß-gestreifte Ader durchklingeln — Durchgang nur innerhalb eines Paares.
+      <strong>2.</strong> Adern verschiedener Paare gegeneinander — kein Schluss.
+      <strong>3.</strong> Alle Adern gegen Schirm (F/UTP) — kein Schluss.
+      <strong>4.</strong> Beide Enden mit W1 und Aderkennzeichnung beschriften.</p>
+
+      <h2 class="abschnitt">Leitungsübersicht der Anlage</h2>
+      <table class="liste">
+        <thead><tr><th>Ltg.</th><th>Von</th><th>Nach</th><th>Ausführung</th></tr></thead>
+        <tbody>
+          <tr><td class="k">W1</td><td class="m">-B1…-B3 (+ZS)</td><td class="m">-X1 (+HWR)</td><td><strong>Cat 6, Volldraht</strong>, ein Paar je Zähler — dieses Blatt</td></tr>
+          <tr><td class="k">W2</td><td class="m">-X1</td><td class="m">-A2 Eingang</td><td>im Schrank, kurz gehalten</td></tr>
+          <tr><td class="k">W3</td><td class="m">-A2 Ausgang</td><td class="m">-X2 → -A1</td><td>Kreis G1, getrennt von W1/W2 führen</td></tr>
+          <tr><td class="k">W7</td><td class="m">-G1</td><td class="m">-A1 µUSB</td><td><strong>Micro-USB, ≥ 0,35 mm²</strong>, offenes Ende auf -G1 — Blatt 7</td></tr>
+        </tbody>
+      </table>
+      <p class="hinweis"><strong>W1 und W7 sind konfektionierte Kabel, keine
+      Meterware.</strong> Bei beiden liegt der Fehler nicht in der Länge, sondern in
+      der Aderzuordnung: bei W1 die Paarbildung, bei W7 die Farbbelegung des
+      USB-Steckers. Beide vor dem Auflegen durchklingeln.</p>
+      <p>Adern innerhalb des Schranks (W2 und folgende): <strong>Blatt 6</strong>.</p>
+
+    </div>
+
+    <div class="schriftfeld">
+      <div class="z"><span class="lbl">Anlage / Benennung</span><span class="val gross">S0-Erfassung 3 WE</span></div>
+      <div class="z"><span class="lbl">Blattart</span><span class="val">Adernliste</span></div>
+      <div class="z"><span class="lbl">Blatt</span><span class="val">5 von 11</span></div>
+      <div class="z"><span class="lbl">Erstellt</span><span class="val">21.08.2026</span></div>
+      <div class="z"><span class="lbl">Änderung</span><span class="val">—</span></div>
+
+      <div class="z"><span class="lbl">Anlagenkennzeichen</span><span class="val">=S0</span></div>
+      <div class="z"><span class="lbl">Ort</span><span class="val">+ZS → +HWR</span></div>
+      <div class="z"><span class="lbl">Format</span><span class="val">A3</span></div>
+      <div class="z"><span class="lbl">Maßstab</span><span class="val">ohne</span></div>
+      <div class="z"><span class="lbl">Index</span><span class="val">a</span></div>
+
+      <div class="z"><span class="lbl">Leitung</span><span class="val">W1</span></div>
+      <div class="z"><span class="lbl">Adern</span><span class="val">8 + Schirm</span></div>
+      <div class="z"><span class="lbl">Typ</span><span class="val">Cat 6, Volldraht</span></div>
+      <div class="z"><span class="lbl">Kreis</span><span class="val">G2</span></div>
+      <div class="z"><span class="lbl">Sprache</span><span class="val">de</span></div>
+
+      <div class="z" style="grid-column: 1 / span 2;"><span class="lbl">Blattinhalt</span><span class="val lang">Ausführung, Paarzuordnung, Auflagen und Prüfung der Leitung zwischen Zählerschrank und neuem Schrank</span></div>
+      <div class="z" style="grid-column: 3 / span 3;"><span class="lbl">Zu prüfen am Gerät</span><span class="val lang">Paare vor dem Auflegen durchklingeln · Klemmenbezeichnung 20/21 am DSZ15D — nicht aus dem Datenblatt belegt</span></div>
+
+      <div class="z sf-nobottom" style="grid-column: 1 / span 2;"><span class="lbl">Hinweis</span><span class="val lang">S0+ und S0− desselben Zählers gehören ins selbe verdrillte Paar · keine RJ45-Stecker · W1 führt keine Netzwerkdaten</span></div>
+      <div class="z sf-nobottom" style="grid-column: 3 / span 2;"><span class="lbl">Zeichnungsnummer</span><span class="val">S0-2026-005</span></div>
+      <div class="z sf-nobottom sf-noright"><span class="lbl">Ersetzt</span><span class="val">—</span></div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════
+     BLATT 6  —  Adernliste im Schrank
+     ════════════════════════════════════════════════════════════ -->
+<section class="blatt">
+  <div class="rahmen"></div>
+  <div class="feld">
+
+    <div class="kopf">
+      <span class="nr">= S0 &nbsp;·&nbsp; Blatt 6</span>
+      <h1>Adernliste — Verdrahtung im Schrank</h1>
+      <span class="sub">Aderkennzeichnung · Farben · Querschnitte · wo 5 V anliegt</span>
+    </div>
+
+    <div class="textflaeche zwei">
+
+      <h2 class="abschnitt">Aderkennzeichnung</h2>
+      <p>Jede Ader trägt an beiden Enden einen Aderendhülsen-Marker mit der hier
+      geführten Nummer. Das Schema ist <span class="m">W&lt;Leitung&gt;.&lt;lfd. Nr.&gt;</span>,
+      also etwa <span class="m">W1.1</span> für die erste Ader der Leitung W1. Farben
+      sind Empfehlungen für die Fertigung; verbindlich ist die Nummer, nicht die Farbe.</p>
+
+      <p>W1, die Leitung zwischen den beiden Orten, hat ein eigenes Blatt:
+      <strong>Blatt 5</strong>. Hier stehen die Adern innerhalb des Schranks.</p>
+
+      <h2 class="abschnitt">W2 · -X1 auf -A2 Eingangsseite · Kreis G2</h2>
+      <p>Kurze Verdrahtung im Schrank. Hier liegt die eigentliche Antwort auf die
+      Frage, wo 5 V gebraucht werden: <strong>-G2 speist ausschließlich diese
+      Eingangsseite</strong>, jeder Kanal bekommt seine 5 V über den zugehörigen Zähler
+      zurück.</p>
+      <table class="liste">
+        <thead><tr><th>Ader</th><th>Farbe</th><th>Von</th><th>Nach</th><th>Potential</th><th>mm²</th></tr></thead>
+        <tbody>
+          <tr><td class="k">W2.1</td><td>rot</td><td class="m">-G2 (+)</td><td class="m">-X1:1, :3, :5 (Brücke)</td><td class="m">+5 V</td><td class="m">0,5</td></tr>
+          <tr><td class="k">W2.2</td><td>weiß</td><td class="m">-X1:2</td><td class="m">-A2 IN1+</td><td class="m">Impuls Kanal 1</td><td class="m">0,25</td></tr>
+          <tr><td class="k">W2.3</td><td>gelb</td><td class="m">-X1:4</td><td class="m">-A2 IN2+</td><td class="m">Impuls Kanal 2</td><td class="m">0,25</td></tr>
+          <tr><td class="k">W2.4</td><td>rosa</td><td class="m">-X1:6</td><td class="m">-A2 IN3+</td><td class="m">Impuls Kanal 3</td><td class="m">0,25</td></tr>
+          <tr><td class="k">W2.5</td><td>blau</td><td class="m">-X1:7</td><td class="m">-A2 IN1−, IN2−, IN3−</td><td class="m">0 V</td><td class="m">0,5</td></tr>
+          <tr><td class="k">W2.6</td><td>blau</td><td class="m">-G2 (−)</td><td class="m">-X1:7</td><td class="m">0 V</td><td class="m">0,5</td></tr>
+          <tr><td class="k">W2.7</td><td>rot</td><td class="m">-G2 (+)</td><td class="m">-F1 Eingang</td><td class="m">+5 V ungesichert</td><td class="m">0,5</td></tr>
+        </tbody>
+      </table>
+      <p>Die Brücke W2.1 auf -X1:1, :3 und :5 verteilt das Pluspotential auf alle drei
+      Zähler. Ist -F1 gesetzt, läuft W2.1 nicht direkt von -G2, sondern vom Ausgang
+      der Sicherung.</p>
+
+      <h2 class="abschnitt">Wo 5 V anliegt — und wo nicht</h2>
+      <table class="liste">
+        <thead><tr><th>Punkt</th><th>Spannung</th><th>Quelle</th><th>Anmerkung</th></tr></thead>
+        <tbody>
+          <tr><td class="m">-X1:1, :3, :5</td><td class="m">+5 V</td><td class="m">-G2</td><td>Speisung der Schleife, dauerhaft anliegend</td></tr>
+          <tr><td class="m">-B1…-B3 S0+</td><td class="m">+5 V</td><td class="m">-G2</td><td>über W1, Anodenseite des S0-Ausgangs</td></tr>
+          <tr><td class="m">-B1…-B3 S0−</td><td class="m">0…5 V</td><td class="m">-G2</td><td>schaltet im Impuls gegen die LED durch</td></tr>
+          <tr><td class="m">-A2 IN1…IN3</td><td class="m">≈ 5 V im Impuls</td><td class="m">-G2</td><td>Strom durch Vorwiderstand begrenzt</td></tr>
+          <tr><td class="m">-X1:7</td><td class="m">0 V</td><td class="m">-G2 (−)</td><td>Bezug <strong>nur</strong> der Eingangsseite</td></tr>
+          <tr><td class="m">-A2 OUT1…OUT3</td><td class="m">max. 3,3 V</td><td class="m">-A1</td><td><strong>nicht</strong> aus -G2 — Kreis G1</td></tr>
+          <tr><td class="m">-X2:4</td><td class="m">0 V</td><td class="m">-A1 Pin 6</td><td>Bezug der Ausgangsseite, getrennt von -X1:7</td></tr>
+          <tr><td class="m">-X2:5</td><td class="m">3,3 V</td><td class="m">-A1 Pin 1</td><td>nur belegen, falls -A2 es fordert</td></tr>
+          <tr><td class="m">-A1 Speisung</td><td class="m">5 V</td><td class="m">-G1 über W7</td><td>eigener Kreis, nicht aus -G2</td></tr>
+          <tr><td class="m">-A1 GPIO Pin 2/4/6</td><td class="m">—</td><td class="m">—</td><td><strong>unbelegt</strong></td></tr>
+        </tbody>
+      </table>
+      <p class="hinweis">Es gibt in dieser Anlage <strong>zwei getrennte
+      0-V-Bezüge</strong>: -G2 (−) für die Eingangsseite und -G1 (−) für alles
+      übrige, also -A1 GND. Diese beiden dürfen nicht verbunden werden.
+      Eine gemeinsame Masse hebt die Trennung durch -A2 auf und macht den Optokoppler
+      wirkungslos. <strong>Beide Netzteile liefern 5 V</strong> — die Gleichheit der
+      Spannung verleitet zum Zusammenlegen der Minusklemmen. Getrennte Klemmen
+      verwenden und beschriften.</p>
+
+      <h2 class="abschnitt">GND-Brücke auf -A2 — muss offen bleiben</h2>
+      <p>Viele PC817-Baugruppen tragen zwischen Eingangs- und Ausgangsmasse eine
+      Lötbrücke oder einen Steckjumper, oft beschriftet mit <span class="m">GND</span>,
+      <span class="m">JP1</span>, <span class="m">COM</span> oder
+      <span class="m">VCC/GND common</span>. Sie ist ab Werk häufig
+      <strong>geschlossen</strong>, weil die Baugruppen üblicherweise als reine
+      Pegelwandler an einer einzigen Versorgung verkauft werden.</p>
+      <table class="liste">
+        <thead><tr><th>Element</th><th>Stellung</th><th>Wirkung</th></tr></thead>
+        <tbody>
+          <tr><td class="k">GND-Brücke</td><td class="m"><strong>offen</strong></td><td>Eingangs- und Ausgangsmasse bleiben getrennt. <strong>So ist sie für diese Anlage zwingend auszuführen.</strong></td></tr>
+          <tr><td class="k">GND-Brücke</td><td class="m">geschlossen</td><td>verbindet -G2 (−) mit -A1 GND. Die galvanische Trennung ist damit aufgehoben, -A2 wirkungslos. <strong>Nicht zulässig.</strong></td></tr>
+          <tr><td class="k">VCC-Wahl</td><td class="m">je nach Baugruppe</td><td>trägt die Baugruppe einen Wahljumper für die Ausgangsversorgung, ist er auf die Seite von -A1 zu stellen, nicht auf -G2</td></tr>
+        </tbody>
+      </table>
+      <p class="hinweis"><strong>Die Brücke ist vor dem Anschluss zu entfernen oder
+      aufzutrennen.</strong> Ob sie offen ist, wird nicht nach Augenschein
+      entschieden, sondern gemessen: Widerstand zwischen Eingangs-GND und
+      Ausgangs-GND der spannungslosen Baugruppe — Erwartung hochohmig
+      (Prüfschritt 6 auf Blatt 10). Ein niederohmiger Wert bedeutet, dass entweder die
+      Brücke noch steht oder die Baugruppe konstruktiv keine Trennung bietet; im
+      zweiten Fall ist sie für diesen Aufbau unbrauchbar.</p>
+      <p>Vorwiderstand auf -A2, Ausgangsseite: Blatt 7.</p>
+
+    </div>
+
+    <div class="schriftfeld">
+      <div class="z"><span class="lbl">Anlage / Benennung</span><span class="val gross">S0-Erfassung 3 WE</span></div>
+      <div class="z"><span class="lbl">Blattart</span><span class="val">Adernliste</span></div>
+      <div class="z"><span class="lbl">Blatt</span><span class="val">6 von 11</span></div>
+      <div class="z"><span class="lbl">Erstellt</span><span class="val">06.08.2026</span></div>
+      <div class="z"><span class="lbl">Änderung</span><span class="val">21.08.2026</span></div>
+
+      <div class="z"><span class="lbl">Anlagenkennzeichen</span><span class="val">=S0</span></div>
+      <div class="z"><span class="lbl">Ort</span><span class="val">+ZS / +HWR</span></div>
+      <div class="z"><span class="lbl">Format</span><span class="val">A3</span></div>
+      <div class="z"><span class="lbl">Maßstab</span><span class="val">ohne</span></div>
+      <div class="z"><span class="lbl">Index</span><span class="val">b</span></div>
+
+      <div class="z"><span class="lbl">Leitungen</span><span class="val">W1 · W2</span></div>
+      <div class="z"><span class="lbl">Adern</span><span class="val">15 + Schirm</span></div>
+      <div class="z"><span class="lbl">Kennzeichnung</span><span class="val">W&lt;Ltg&gt;.&lt;Nr&gt;</span></div>
+      <div class="z"><span class="lbl">Kreise</span><span class="val">G1 · G2</span></div>
+      <div class="z"><span class="lbl">Sprache</span><span class="val">de</span></div>
+
+      <div class="z" style="grid-column: 1 / span 2;"><span class="lbl">Blattinhalt</span><span class="val lang">Adern der S0-Seite mit Paarzuordnung in W1, Potentialübersicht, GND-Brücke und Vorwiderstand auf -A2</span></div>
+      <div class="z" style="grid-column: 3 / span 3;"><span class="lbl">Zu prüfen am Gerät</span><span class="val lang">W1 vor dem Auflegen durchklingeln, Durchgang nur innerhalb eines Paares · GND-Brücke auf -A2 muss offen sein · Klemmenbezeichnung am DSZ15D — nicht aus Datenblättern belegt</span></div>
+
+      <div class="z sf-nobottom" style="grid-column: 1 / span 2;"><span class="lbl">Hinweis</span><span class="val lang">W1 · S0+ und S0− eines Zählers gehören ins selbe Paar · zwei getrennte 0-V-Bezüge -G2 (−) und -G1 (−), beide 5 V, niemals verbinden</span></div>
+      <div class="z sf-nobottom" style="grid-column: 3 / span 2;"><span class="lbl">Zeichnungsnummer</span><span class="val">S0-2026-006</span></div>
+      <div class="z sf-nobottom sf-noright"><span class="lbl">Ersetzt</span><span class="val">—</span></div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════
+     BLATT 8  —  Adernliste Anzeige
+     ════════════════════════════════════════════════════════════ -->
+<section class="blatt">
+  <div class="rahmen"></div>
+  <div class="feld">
+
+    <div class="kopf">
+      <span class="nr">= S0 &nbsp;·&nbsp; Blatt 7</span>
+      <h1>Adernliste Ausgangsseite</h1>
+      <span class="sub">W3 GPIO · W7 Versorgung · Vorwiderstand -A2</span>
+    </div>
+
+    <div class="textflaeche zwei">
+
+      <h2 class="abschnitt">Vorwiderstand am Optokoppler -A2</h2>
+      <p>Die Baugruppe -A2 bringt je Kanal einen Vorwiderstand mit (im Plan als -R1…-R3
+      geführt). Er begrenzt den Strom durch die Leuchtdiode des PC817 und damit den
+      Strom, den der S0-Ausgang des Zählers führen muss.</p>
+      <table class="liste">
+        <thead><tr><th>Größe</th><th>Wert</th><th>Herkunft</th></tr></thead>
+        <tbody>
+          <tr><td>Speisespannung</td><td class="m">5 V</td><td>-G2, festgelegt</td></tr>
+          <tr><td>Flussspannung LED</td><td class="m">≈ 1,2 V</td><td>PC817, typischer Wert</td></tr>
+          <tr><td>Grenzstrom S0-Ausgang</td><td class="m">20 mA</td><td>Eltako DSZ15D, Herstellerangabe</td></tr>
+          <tr><td>Widerstand rechnerisch</td><td class="m">≥ 190 Ω</td><td>(5 V − 1,2 V) / 20 mA</td></tr>
+          <tr><td>Übliche Bestückung</td><td class="m">470 Ω … 1 kΩ</td><td>ergibt rund 4…8 mA</td></tr>
+        </tbody>
+      </table>
+      <p class="hinweis"><strong>Vor dem Anschluss den bestückten Wert prüfen.</strong>
+      Ist die Baugruppe für 24 V ausgelegt — viele PC817-Module sind das —, sitzt dort
+      ein Widerstand um 2,2 kΩ. Bei 5 V fließen dann nur rund 1,7 mA, und der
+      Optokoppler schaltet unter Umständen nicht sicher durch. Dann ist der Widerstand
+      zu tauschen oder eine für 5 V ausgelegte Baugruppe zu verwenden. Der gemessene
+      Eingangsstrom aus Prüfschritt 9 auf Blatt 10 muss zwischen etwa 3 mA und 20 mA
+      liegen.</p>
+
+      <h2 class="abschnitt">W3 · -A2 Ausgangsseite auf -A1 · Kreis G1</h2>
+      <table class="liste">
+        <thead><tr><th>Ader</th><th>Farbe</th><th>Von</th><th>Nach</th><th>BCM</th><th>mm²</th></tr></thead>
+        <tbody>
+          <tr><td class="k">W3.1</td><td>weiß</td><td class="m">-A2 OUT1</td><td class="m">-X2:1 → -A1 Pin 11</td><td class="m">GPIO17</td><td class="m">0,25</td></tr>
+          <tr><td class="k">W3.2</td><td>gelb</td><td class="m">-A2 OUT2</td><td class="m">-X2:2 → -A1 Pin 13</td><td class="m">GPIO27</td><td class="m">0,25</td></tr>
+          <tr><td class="k">W3.3</td><td>rosa</td><td class="m">-A2 OUT3</td><td class="m">-X2:3 → -A1 Pin 15</td><td class="m">GPIO22</td><td class="m">0,25</td></tr>
+          <tr><td class="k">W3.4</td><td>schwarz</td><td class="m">-A2 Ausg.-GND</td><td class="m">-X2:4 → -A1 Pin 6</td><td class="m">GND</td><td class="m">0,25</td></tr>
+          <tr><td class="k">W3.5</td><td>rot</td><td class="m">-A2 Ausg.-VCC</td><td class="m">-X2:5 → -A1 Pin 1</td><td class="m">3,3 V</td><td class="m">0,25</td></tr>
+        </tbody>
+      </table>
+      <p>W3.5 wird nur ausgeführt, wenn -A2 einen eigenen Ausgangs-VCC fordert. Bei
+      reinem Open-Collector-Ausgang entfällt die Ader ersatzlos. W3.4 führt den Bezug
+      der Ausgangsseite auf -A1 — er ist <strong>nicht</strong> mit -X1:7 zu verbinden.</p>
+
+      <h2 class="abschnitt">W7 · -G1 auf -A1 · Versorgung der Rechnereinheit, Kreis G1</h2>
+      <p>Ein <strong>Micro-USB-Kabel</strong>, dessen offenes Ende auf die Netzteilklemmen
+      von -G1 aufgelegt wird. Der Stecker geht in die Micro-USB-Buchse des Pi — nur
+      dort wirkt dessen interne Polyfuse.</p>
+      <table class="liste">
+        <thead><tr><th>Ader</th><th>Farbe</th><th>Von</th><th>Nach</th><th>Potential</th><th>mm²</th></tr></thead>
+        <tbody>
+          <tr><td class="k">W7.1</td><td>rot</td><td class="m">-G1 (+)</td><td class="m">µUSB-Stecker VBUS</td><td class="m">+5 V</td><td class="m">≥ 0,35</td></tr>
+          <tr><td class="k">W7.2</td><td>schwarz</td><td class="m">-G1 (−)</td><td class="m">µUSB-Stecker GND</td><td class="m">0 V</td><td class="m">≥ 0,35</td></tr>
+          <tr><td class="k">W7.3</td><td>grün</td><td class="m">—</td><td class="m">unbeschaltet, isoliert</td><td class="m">D+</td><td class="m">—</td></tr>
+          <tr><td class="k">W7.4</td><td>weiß</td><td class="m">—</td><td class="m">unbeschaltet, isoliert</td><td class="m">D−</td><td class="m">—</td></tr>
+        </tbody>
+      </table>
+      <p class="hinweis"><strong>Die Farbzuordnung ist vor dem Auflegen
+      durchzuklingeln</strong> — gegen die Kontakte des Micro-USB-Steckers, nicht nach
+      Augenschein. Billigkabel halten sich nicht immer an die Norm, und eine Verpolung
+      zerstört den Pi. Ist das gekaufte Kabel beidseitig konfektioniert, wird das
+      <strong>USB-A-Ende abgeschnitten</strong>; die Datenadern werden einzeln isoliert
+      und nicht auf -G1 gelegt.</p>
+      <p class="hinweis"><strong>Mindestens 0,35 mm² (AWG 22), kurz halten.</strong> W7
+      trägt den gesamten Strom des Pi — bis 2,5 A. Ein Ladekabel mit 0,08…0,13 mm²
+      fällt dabei um mehrere Zehntel Volt ab; der Pi meldet das als Unterspannung
+      (<span class="m">vcgencmd get_throttled</span>, Prüfschritt 16 auf Blatt 10) und
+      wird instabil, ohne dass ein Bauteil defekt wäre.</p>
+
+
+    </div>
+
+    <div class="schriftfeld">
+      <div class="z"><span class="lbl">Anlage / Benennung</span><span class="val gross">S0-Erfassung 3 WE</span></div>
+      <div class="z"><span class="lbl">Blattart</span><span class="val">Adernliste</span></div>
+      <div class="z"><span class="lbl">Blatt</span><span class="val">7 von 11</span></div>
+      <div class="z"><span class="lbl">Erstellt</span><span class="val">06.08.2026</span></div>
+      <div class="z"><span class="lbl">Änderung</span><span class="val">—</span></div>
+
+      <div class="z"><span class="lbl">Anlagenkennzeichen</span><span class="val">=S0</span></div>
+      <div class="z"><span class="lbl">Betriebsmittel</span><span class="val">-A2</span></div>
+      <div class="z"><span class="lbl">Format</span><span class="val">A3</span></div>
+      <div class="z"><span class="lbl">Maßstab</span><span class="val">ohne</span></div>
+      <div class="z"><span class="lbl">Index</span><span class="val">a</span></div>
+
+      <div class="z"><span class="lbl">Leitungen</span><span class="val">W3 · W7</span></div>
+      <div class="z"><span class="lbl">Adern</span><span class="val">9</span></div>
+      <div class="z"><span class="lbl">Stecker</span><span class="val">—</span></div>
+      <div class="z"><span class="lbl">Kreise</span><span class="val">G1</span></div>
+      <div class="z"><span class="lbl">Sprache</span><span class="val">de</span></div>
+
+      <div class="z" style="grid-column: 1 / span 2;"><span class="lbl">Blattinhalt</span><span class="val lang">Adern der Optokoppler-Ausgangsseite und der Versorgung, Vorwiderstand -A2</span></div>
+      <div class="z" style="grid-column: 3 / span 3;"><span class="lbl">Zu prüfen am Gerät</span><span class="val lang">Spannung an OUT1…OUT3 gegen -A1 GND vor dem Auflegen messen — höchstens 3,3 V</span></div>
+
+      <div class="z sf-nobottom" style="grid-column: 1 / span 2;"><span class="lbl">Hinweis</span><span class="val lang">W3.5 nur bei Bedarf · W3.4 nicht mit -X1:7 verbinden · Leitungsübersicht W1…W7 auf Blatt 4</span></div>
+      <div class="z sf-nobottom" style="grid-column: 3 / span 2;"><span class="lbl">Zeichnungsnummer</span><span class="val">S0-2026-007</span></div>
+      <div class="z sf-nobottom sf-noright"><span class="lbl">Ersetzt</span><span class="val">—</span></div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════
+     BLATT 9  —  Betriebsmittelliste
+     ════════════════════════════════════════════════════════════ -->
+<section class="blatt">
+  <div class="rahmen"></div>
+  <div class="feld">
+
+    <div class="kopf">
+      <span class="nr">= S0 &nbsp;·&nbsp; Blatt 8</span>
+      <h1>Betriebsmittelliste</h1>
+      <span class="sub">Kennzeichnung nach DIN EN 81346-2</span>
+    </div>
+
+    <div class="textflaeche zwei">
+
+      <h2 class="abschnitt">Betriebsmittel dieser Anlage</h2>
+      <table class="liste">
+        <thead><tr><th>BMK</th><th>Bezeichnung</th><th>Typ</th><th>Blatt</th><th>Anmerkung</th></tr></thead>
+        <tbody>
+          <tr><td class="k">-A1</td><td>Rechnereinheit</td><td>Raspberry Pi 3B</td><td class="m">1, 3</td><td>Raspberry Pi OS Lite 64 bit (Trixie)</td></tr>
+          <tr><td class="k">-A2</td><td>Optokopplerbaugruppe</td><td>JZK PC817, 4 Kanal</td><td class="m">1, 2, 3</td><td>Eingang 3,6…24 V, Kanal 4 unbenutzt</td></tr>
+          <tr><td class="k">-B1</td><td>Wirkverbrauchszähler EG</td><td>Eltako DSZ15D-3x80A</td><td class="m">1, 2</td><td>1000 Imp/kWh, geeicht</td></tr>
+          <tr><td class="k">-B2</td><td>Wirkverbrauchszähler OG</td><td>Eltako DSZ15D-3x80A</td><td class="m">1, 2</td><td>1000 Imp/kWh, geeicht</td></tr>
+          <tr><td class="k">-B3</td><td>Wirkverbrauchszähler DG</td><td>Eltako DSZ15D-3x80A</td><td class="m">1, 2</td><td>1000 Imp/kWh, geeicht</td></tr>
+          <tr><td class="k">-G1</td><td>Netzteil Rechner</td><td>5 V DC, 5 A</td><td class="m">1, 3</td><td>speist -A1 über W7</td></tr>
+          <tr><td class="k">-G2</td><td>Netzteil S0-Kreis</td><td>5 V DC, 5 A, SELV</td><td class="m">1, 2</td><td>nicht aus -G1 speisen, 0 V getrennt halten</td></tr>
+          <tr><td class="k">-F1</td><td>Sicherung Kreis G2</td><td>100 mA träge</td><td class="m">2</td><td><strong>erforderlich</strong> — -G2 begrenzt bei 5 A nicht</td></tr>
+          <tr><td class="k">-X1</td><td>Klemmenleiste S0-Eingang</td><td>7 Klemmen</td><td class="m">2, 4</td><td>im neuen Schrank; Endpunkt von W1 aus dem Zählerschrank</td></tr>
+          <tr><td class="k">-X2</td><td>Klemmenleiste GPIO</td><td>5 Klemmen</td><td class="m">3, 4</td><td>X2:5 nur bei Bedarf</td></tr>
+          <tr><td class="k">W1</td><td>S0-Leitung zwischen den Orten</td><td>Cat 6, Volldraht, 4 Paare</td><td class="m">1, 5</td><td>ein Paar je Zähler, Paar 4 Reserve; keine RJ45-Stecker</td></tr>
+          <tr><td class="k">W7</td><td>Versorgungskabel Rechnereinheit</td><td>Micro-USB, ≥ 0,35 mm²</td><td class="m">3, 9</td><td>offenes Ende auf -G1; Datenadern isoliert, Polung durchklingeln</td></tr>
+        </tbody>
+      </table>
+
+      <h2 class="abschnitt">Ergänzende Geräte im Netzwerk</h2>
+      <p>Nicht Bestandteil dieser Anlage, aber für den Betrieb der Auswertung
+      erforderlich.</p>
+      <table class="liste">
+        <thead><tr><th>BMK</th><th>Gerät</th><th>Adresse</th><th>Rolle</th></tr></thead>
+        <tbody>
+          <tr><td class="k">-K1</td><td>Sonnenbatterie</td><td class="m">192.168.0.50</td><td>liefert PV, Netzbezug und Akku über HTTP; vom Pi direkt gelesen</td></tr>
+          <tr><td class="k">-K2</td><td>Home Assistant</td><td class="m">192.168.0.30:8123</td><td>Zweitquelle und Visualisierung, Anbindung über REST</td></tr>
+        </tbody>
+      </table>
+      <p>Ein MQTT-Broker existiert in dieser Anlage nicht; Port 1883 ist auf
+      192.168.0.30, 192.168.0.40 und 192.168.0.50 geschlossen. Die Anbindung läuft
+      deshalb über REST. Gesetzte Zustände hängen dabei an keiner Integration und sind
+      nach einem Neustart von -K2 verschwunden, bis der Pi erneut veröffentlicht; der
+      Recorder-Verlauf bleibt erhalten.</p>
+
+      <h2 class="abschnitt">Kennzeichnungssystematik</h2>
+      <table class="liste">
+        <thead><tr><th>Kennbuchstabe</th><th>Bedeutung nach DIN EN 81346-2</th><th>hier</th></tr></thead>
+        <tbody>
+          <tr><td class="k">A</td><td>Baugruppe, Teilsystem</td><td class="m">-A1, -A2</td></tr>
+          <tr><td class="k">B</td><td>Umsetzen einer Eingangsgröße in ein Signal</td><td class="m">-B1…-B3</td></tr>
+          <tr><td class="k">F</td><td>Schützen gegen Überstrom</td><td class="m">-F1</td></tr>
+          <tr><td class="k">G</td><td>Erzeugen elektrischer Energie</td><td class="m">-G1, -G2</td></tr>
+          <tr><td class="k">K</td><td>Verarbeiten von Signalen, Informationsverarbeitung</td><td class="m">-K1, -K2</td></tr>
+          <tr><td class="k">W</td><td>Übertragen von Energie oder Signalen (Leitung)</td><td class="m">W1, W3, W7</td></tr>
+          <tr><td class="k">X</td><td>Verbinden von Objekten (Klemme, Stecker)</td><td class="m">-X1, -X2</td></tr>
+        </tbody>
+      </table>
+
+    </div>
+
+    <div class="schriftfeld">
+      <div class="z"><span class="lbl">Anlage / Benennung</span><span class="val gross">S0-Erfassung 3 WE</span></div>
+      <div class="z"><span class="lbl">Blattart</span><span class="val">Betriebsmittelliste</span></div>
+      <div class="z"><span class="lbl">Blatt</span><span class="val">8 von 11</span></div>
+      <div class="z"><span class="lbl">Erstellt</span><span class="val">06.08.2026</span></div>
+      <div class="z"><span class="lbl">Änderung</span><span class="val">—</span></div>
+
+      <div class="z"><span class="lbl">Anlagenkennzeichen</span><span class="val">=S0</span></div>
+      <div class="z"><span class="lbl">Ort</span><span class="val">+ZS / +HWR</span></div>
+      <div class="z"><span class="lbl">Format</span><span class="val">A3</span></div>
+      <div class="z"><span class="lbl">Maßstab</span><span class="val">ohne</span></div>
+      <div class="z"><span class="lbl">Index</span><span class="val">a</span></div>
+
+      <div class="z"><span class="lbl">Kennzeichnung</span><span class="val">DIN EN 81346-2</span></div>
+      <div class="z"><span class="lbl">Betriebsmittel</span><span class="val">12 + 2 extern</span></div>
+      <div class="z"><span class="lbl">Format</span><span class="val">Liste</span></div>
+      <div class="z"><span class="lbl">Kreise</span><span class="val">G1 · G2</span></div>
+      <div class="z"><span class="lbl">Sprache</span><span class="val">de</span></div>
+
+      <div class="z" style="grid-column: 1 / span 2;"><span class="lbl">Blattinhalt</span><span class="val lang">Betriebsmittel der Anlage, ergänzende Netzwerkgeräte, Kennzeichnungssystematik</span></div>
+      <div class="z" style="grid-column: 3 / span 3;"><span class="lbl">Querverweis</span><span class="val lang">Blattspalte verweist auf das jeweilige Plan-Blatt</span></div>
+
+      <div class="z sf-nobottom" style="grid-column: 1 / span 2;"><span class="lbl">Hinweis</span><span class="val lang">-K1 und -K2 sind nicht Bestandteil dieser Anlage und werden hier nur zur Vollständigkeit der Signalwege geführt</span></div>
+      <div class="z sf-nobottom" style="grid-column: 3 / span 2;"><span class="lbl">Zeichnungsnummer</span><span class="val lang">S0-2026-008</span></div>
+      <div class="z sf-nobottom sf-noright"><span class="lbl">Ersetzt</span><span class="val">—</span></div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════
+     BLATT 8  —  Spannungsversorgungen
+     ════════════════════════════════════════════════════════════ -->
+<section class="blatt">
+  <div class="rahmen"></div>
+  <div class="feld">
+
+    <div class="kopf">
+      <span class="nr">= S0 &nbsp;·&nbsp; Blatt 9</span>
+      <h1>Spannungsversorgungen und Auslegung</h1>
+      <span class="sub">Kreise G1, G2 · Begründung der Werte</span>
+    </div>
+
+    <div class="textflaeche zwei">
+
+      <h2 class="abschnitt">Übersicht der zwei Kreise</h2>
+      <p>Zwei getrennte Kreise, beide 5 V DC. Die Trennung ist Absicht, nicht Zufall —
+      sie ist der Grund, warum ein Fehler im Zählerschrank nicht auf die
+      Rechnereinheit durchschlägt.</p>
+      <table class="liste">
+        <thead><tr><th>BMK</th><th>Kreis</th><th>Spannung</th><th>Speist</th><th>Trennung</th></tr></thead>
+        <tbody>
+          <tr><td class="k">-G1</td><td>Rechnereinheit</td><td class="m">5 V DC</td><td class="m">-A1</td><td>SELV, getrennt von G2</td></tr>
+          <tr><td class="k">-G2</td><td>S0-Schleife</td><td class="m">5 V DC</td><td class="m">-B1…-B3, -A2 Eingang</td><td>SELV, <strong>muss</strong> von G1 getrennt bleiben</td></tr>
+        </tbody>
+      </table>
+      <p class="hinweis"><strong>Beide Netzteile sind 5 V — und genau darin liegt die
+      Gefahr.</strong> Gleiche Spannung verleitet dazu, die Minuspole zusammenzulegen
+      oder ein Netzteil einzusparen. Das hebt die Trennung auf. Zwei getrennte
+      SELV-Netzteile an derselben 230-V-Zuleitung und mit gemeinsamem Schutzleiter
+      bleiben sekundärseitig getrennt, solange die 0-V-Zweige nicht verdrahtet
+      werden — der Trenntrafo im Netzteil leistet das. Der Schutzleiter liegt am
+      Gehäuse, nicht am Minuspol.</p>
+      <p>Die Anlage kommt mit <strong>zwei</strong> Netzteilen aus.</p>
+
+      <h3 class="unter">-G1 · Raspberry Pi</h3>
+      <table class="liste">
+        <tbody>
+          <tr><td class="k">Typ</td><td>Netzteil 5 V DC, vorhanden: <strong>5 A</strong></td></tr>
+          <tr><td class="k">Strom</td><td>mindestens 3 A</td></tr>
+          <tr><td class="k">Begründung</td><td>Der Pi 3B zieht laut Herstellerangabe bis 2,5 A.</td></tr>
+          <tr><td class="k">Anschluss -A1</td><td><strong>Micro-USB über W7.</strong> Nur über diese Buchse wirkt die interne Polyfuse des Pi; über die GPIO-Leiste eingespeist ist sie umgangen und es gibt keinen Verpolungsschutz.</td></tr>
+        </tbody>
+      </table>
+      <p class="hinweis"><strong>W7, das Micro-USB-Kabel, ist die schwächste Stelle von
+      -G1</strong> — mindestens 0,35 mm² (AWG 22), kurz halten, Polung vor dem Auflegen
+      durchklingeln. Vollständige Adernliste und Begründung auf <strong>Blatt 7</strong>.</p>
+
+      <h3 class="unter">-G2 · S0-Stromschleife</h3>
+      <table class="liste">
+        <tbody>
+          <tr><td class="k">Typ</td><td>Hutschienennetzteil 5 V DC, SELV, vorhanden: <strong>5 A</strong></td></tr>
+          <tr><td class="k">Strom</td><td>mindestens 100 mA, ausgeführt mit 5 A</td></tr>
+          <tr><td class="k">Begründung</td><td>Drei S0-Kanäle, je nach Vorwiderstand rund 5…15 mA im aktiven Zustand. Der S0-Ausgang des DSZ15D lässt laut Eltako höchstens 20 mA zu, bei drei gleichzeitig aktiven Kanälen also maximal 60 mA. Das 5-A-Netzteil ist stark überdimensioniert; das ist unschädlich, aber die Absicherung -F1 wird dadurch zur Pflicht.</td></tr>
+        </tbody>
+      </table>
+      <p class="hinweis"><strong>Nicht aus -G1 speisen.</strong> Eine gemeinsame
+      Versorgung hebt die galvanische Trennung zwischen Zählerschrank und
+      Rechnereinheit auf und macht den Optokoppler -A2 wirkungslos.
+      <strong>-F1 ist bei diesem Netzteil nicht optional:</strong> 5 A stehen einer
+      Last von 60 mA gegenüber, das Netzteil begrenzt im Fehlerfall also praktisch
+      nicht. Die S0-Verdrahtung wird allein durch -F1 geschützt.</p>
+
+      <p class="hinweis"><strong>Sicherheitshinweise:</strong> Arbeiten am Zähler
+      betreffen die Niederspannungs-Hauptverteilung — Freischalten, gegen
+      Wiedereinschalten sichern, Spannungsfreiheit feststellen, Erden und
+      Kurzschließen, benachbarte unter Spannung stehende Teile abdecken. Die
+      S0-Leitung W1 getrennt von netzspannungsführenden Leitungen verlegen.
+      <strong>0 V von -G1 und -X1:7 (0 V von -G2) gehören auf getrennte,
+      beschriftete Klemmen</strong> und dürfen nirgends gebrückt werden. Prüfschritte
+      auf Blatt 10.</p>
+
+    </div>
+
+    <div class="schriftfeld">
+      <div class="z"><span class="lbl">Anlage / Benennung</span><span class="val gross">S0-Erfassung 3 WE</span></div>
+      <div class="z"><span class="lbl">Blattart</span><span class="val">Auslegung</span></div>
+      <div class="z"><span class="lbl">Blatt</span><span class="val">9 von 11</span></div>
+      <div class="z"><span class="lbl">Erstellt</span><span class="val">06.08.2026</span></div>
+      <div class="z"><span class="lbl">Änderung</span><span class="val">—</span></div>
+
+      <div class="z"><span class="lbl">Anlagenkennzeichen</span><span class="val">=S0</span></div>
+      <div class="z"><span class="lbl">Ort</span><span class="val">+ZS / +HWR</span></div>
+      <div class="z"><span class="lbl">Format</span><span class="val">A3</span></div>
+      <div class="z"><span class="lbl">Maßstab</span><span class="val">ohne</span></div>
+      <div class="z"><span class="lbl">Index</span><span class="val">a</span></div>
+
+      <div class="z"><span class="lbl">Kennzeichnung</span><span class="val">DIN EN 81346-2</span></div>
+      <div class="z"><span class="lbl">Schutzart</span><span class="val">SELV</span></div>
+      <div class="z"><span class="lbl">Kreise</span><span class="val">2</span></div>
+      <div class="z"><span class="lbl">Sprache</span><span class="val">de</span></div>
+
+      <div class="z" style="grid-column: 1 / span 2;"><span class="lbl">Blattinhalt</span><span class="val lang">Auslegung der zwei Spannungskreise mit Begründung, Sicherheitshinweise</span></div>
+      <div class="z" style="grid-column: 3 / span 3;"><span class="lbl">Querverweis</span><span class="val lang">Klemmen → Blatt 4 · Prüfschritte → Blatt 10</span></div>
+
+      <div class="z sf-nobottom" style="grid-column: 1 / span 2;"><span class="lbl">Hinweis</span><span class="val lang">-G2 niemals aus -G1 speisen — beide 5 V, 0-V-Zweige getrennt halten</span></div>
+      <div class="z sf-nobottom" style="grid-column: 3 / span 2;"><span class="lbl">Zeichnungsnummer</span><span class="val lang">S0-2026-009</span></div>
+      <div class="z sf-nobottom sf-noright"><span class="lbl">Ersetzt</span><span class="val">—</span></div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════
+     BLATT 10  —  Inbetriebnahme
+     ════════════════════════════════════════════════════════════ -->
+<section class="blatt">
+  <div class="rahmen"></div>
+  <div class="feld">
+
+    <div class="kopf">
+      <span class="nr">= S0 &nbsp;·&nbsp; Blatt 10</span>
+      <h1>Prüfschritte vor der Inbetriebnahme</h1>
+      <span class="sub">Reihenfolge einhalten — jeder Schritt setzt den vorigen voraus</span>
+    </div>
+
+    <div class="textflaeche zwei">
+
+      <h2 class="abschnitt">1 · Leitung W1, beide Enden frei</h2>
+      <ol>
+        <li>Je Paar volle Farbe gegen weiß-gestreifte Ader durchklingeln.
+          <span class="erw">Erwartung: Durchgang nur <b>innerhalb</b> eines Paares. Details und Belegung auf Blatt 5.</span></li>
+        <li>Adern verschiedener Paare gegeneinander und alle gegen den Schirm messen.
+          <span class="erw">Erwartung: kein Schluss zwischen Paaren, kein Schluss gegen Schirm.</span></li>
+        <li>Beide Enden mit <span class="m">W1</span> und der Aderkennzeichnung beschriften.
+          <span class="erw">Damit wird das Kabel später nicht für ein freies Netzwerkkabel gehalten und umgesteckt.</span></li>
+      </ol>
+
+      <h2 class="abschnitt">2 · Optokopplerbaugruppe, spannungslos</h2>
+      <ol start="4">
+        <li>Eingangs- und Ausgangsseite von -A2 am Platinenaufdruck bestimmen.</li>
+        <li><b>GND-Brücke suchen und öffnen.</b> Lötbrücke oder Jumper zwischen Eingangs- und Ausgangsmasse, oft <span class="m">GND</span>, <span class="m">JP1</span> oder <span class="m">COM</span> beschriftet. Ab Werk häufig geschlossen.
+          <span class="erw">Erwartung: offen. Steht sie, ist die Trennung aufgehoben — Einzelheiten auf Blatt 6.</span></li>
+        <li>Widerstand zwischen Eingangs-GND und Ausgangs-GND messen.
+          <span class="erw">Erwartung: hochohmig. Ein niederohmiger Wert bedeutet, dass die Brücke noch steht oder die Baugruppe keine galvanische Trennung bietet — dann nicht verwenden.</span></li>
+      </ol>
+
+      <h2 class="abschnitt">3 · Optokoppler mit Versorgung, ohne Rechnereinheit</h2>
+      <ol start="7">
+        <li>-G2 anschließen, einen Kanal am Eingang aktivieren.</li>
+        <li>Spannung an OUTx gegen Ausgangs-GND messen.
+          <span class="erw">Erwartung: maximal 3,3 V. Höhere Werte zerstören den GPIO.</span></li>
+        <li>Eingangsstrom bei 5 V messen.
+          <span class="erw">Erwartung: unter 20 mA je Kanal — Grenzwert des S0-Ausgangs.</span></li>
+      </ol>
+
+      <h2 class="abschnitt">4 · Versorgung -G1, bevor der Pi angesteckt wird</h2>
+      <ol start="10">
+        <li><b>W7 auflegen — rot und schwarz vorher durchklingeln.</b> Rot auf -G1 (+), schwarz auf -G1 (−); die Datenadern (grün, weiß) einzeln isolieren.
+          <span class="erw">Erwartung: rot führt +5 V, schwarz GND. Eine Verpolung zerstört den Pi. Billigkabel halten sich nicht immer an die Farbnorm — messen, nicht ansehen.</span></li>
+        <li>-G1 einschalten, Spannung am Micro-USB-Stecker messen — Pi noch <b>nicht</b> angesteckt.
+          <span class="erw">Erwartung: 4,75…5,25 V, richtige Polung.</span></li>
+        <li><b>Trennung prüfen:</b> Widerstand zwischen 0 V von -G1 und -X1:7 (0 V von -G2) messen, beide Netzteile aus.
+          <span class="erw">Erwartung: hochohmig. Ein niederohmiger Wert heißt, dass die beiden 0-V-Zweige gebrückt sind — dann ist die Trennung aufgehoben und der Fehler zu suchen, bevor es weitergeht.</span></li>
+      </ol>
+
+      <h2 class="abschnitt">5 · Zusammenbau</h2>
+      <ol start="13">
+        <li>Pi über W7 anstecken, -X2 auflegen, Rechnereinheit starten.</li>
+        <li><span class="m">test_gpio.py</span> laufen lassen, jeden Kanal einzeln aktivieren.
+          <span class="erw">Erwartung: genau ein Ereignis je Aktivierung.</span></li>
+        <li>Auf Unterspannung prüfen: <span class="m">vcgencmd get_throttled</span>.
+          <span class="erw">Erwartung: <span class="m">throttled=0x0</span>. Ein gesetztes Bit 0 oder 16 heißt Unterspannung — dann ist W7 zu dünn oder zu lang.</span></li>
+        <li><span class="m">s0ctl status</span> aufrufen.
+          <span class="erw">Erwartung: alle drei Kanäle werden geführt, Impulse laufen auf.</span></li>
+      </ol>
+
+      <h2 class="abschnitt">6 · Abgleich der Zählerstände</h2>
+      <ol start="17">
+        <li>Zählerstände aller drei Zähler ablesen und fotografieren.</li>
+        <li>Je Zähler <span class="m">s0ctl set-reading &lt;kanal&gt; &lt;stand&gt; --force</span> ausführen.</li>
+        <li>Nach 24 Stunden Zählerstände erneut ablesen und mit <span class="m">s0ctl status</span> vergleichen.
+          <span class="erw">Erwartung: Die Differenzen stimmen im Rahmen der Ableseauflösung überein.</span></li>
+      </ol>
+      <p class="hinweis">Damit ist die Zähleranlage in Betrieb.</p>
+
+      <h2 class="abschnitt">Prüfprotokoll</h2>
+      <p>Messwerte bei der Inbetriebnahme eintragen.</p>
+      <table class="liste">
+        <thead><tr><th>Prüfung</th><th>Erwartung</th><th>Messwert</th><th>i. O.</th><th>Datum</th></tr></thead>
+        <tbody>
+          <tr><td>W1 · Durchgang nur innerhalb der Paare</td><td class="m">geprüft</td><td class="m">&nbsp;</td><td class="m">☐</td><td class="m">&nbsp;</td></tr>
+          <tr><td>W1 · kein Schluss zwischen Paaren / gegen Schirm</td><td class="m">geprüft</td><td class="m">&nbsp;</td><td class="m">☐</td><td class="m">&nbsp;</td></tr>
+          <tr><td>GND-Brücke -A2 offen</td><td class="m">offen</td><td class="m">&nbsp;</td><td class="m">☐</td><td class="m">&nbsp;</td></tr>
+          <tr><td>Trennung -A2 Ein/Aus</td><td class="m">hochohmig</td><td class="m">&nbsp;</td><td class="m">☐</td><td class="m">&nbsp;</td></tr>
+          <tr><td>OUT1 gegen GND</td><td class="m">≤ 3,3 V</td><td class="m">&nbsp;</td><td class="m">☐</td><td class="m">&nbsp;</td></tr>
+          <tr><td>OUT2 gegen GND</td><td class="m">≤ 3,3 V</td><td class="m">&nbsp;</td><td class="m">☐</td><td class="m">&nbsp;</td></tr>
+          <tr><td>OUT3 gegen GND</td><td class="m">≤ 3,3 V</td><td class="m">&nbsp;</td><td class="m">☐</td><td class="m">&nbsp;</td></tr>
+          <tr><td>Eingangsstrom Kanal 1</td><td class="m">&lt; 20 mA</td><td class="m">&nbsp;</td><td class="m">☐</td><td class="m">&nbsp;</td></tr>
+          <tr><td>Eingangsstrom Kanal 2</td><td class="m">&lt; 20 mA</td><td class="m">&nbsp;</td><td class="m">☐</td><td class="m">&nbsp;</td></tr>
+          <tr><td>Eingangsstrom Kanal 3</td><td class="m">&lt; 20 mA</td><td class="m">&nbsp;</td><td class="m">☐</td><td class="m">&nbsp;</td></tr>
+          <tr><td>W7 · Polung rot/schwarz durchgeklingelt</td><td class="m">geprüft</td><td class="m">&nbsp;</td><td class="m">☐</td><td class="m">&nbsp;</td></tr>
+          <tr><td>Spannung am µUSB-Stecker, Pi ab</td><td class="m">4,75…5,25 V</td><td class="m">&nbsp;</td><td class="m">☐</td><td class="m">&nbsp;</td></tr>
+          <tr><td>0 V (−G1) und -X1:7 (−G2) nicht verbunden</td><td class="m">hochohmig</td><td class="m">&nbsp;</td><td class="m">☐</td><td class="m">&nbsp;</td></tr>
+          <tr><td>vcgencmd get_throttled</td><td class="m">0x0</td><td class="m">&nbsp;</td><td class="m">☐</td><td class="m">&nbsp;</td></tr>
+          <tr><td>test_gpio.py Kanal 1</td><td class="m">1 Ereignis</td><td class="m">&nbsp;</td><td class="m">☐</td><td class="m">&nbsp;</td></tr>
+          <tr><td>test_gpio.py Kanal 2</td><td class="m">1 Ereignis</td><td class="m">&nbsp;</td><td class="m">☐</td><td class="m">&nbsp;</td></tr>
+          <tr><td>test_gpio.py Kanal 3</td><td class="m">1 Ereignis</td><td class="m">&nbsp;</td><td class="m">☐</td><td class="m">&nbsp;</td></tr>
+          <tr><td>Abgleich EG nach 24 h</td><td class="m">Differenz gleich</td><td class="m">&nbsp;</td><td class="m">☐</td><td class="m">&nbsp;</td></tr>
+          <tr><td>Abgleich OG nach 24 h</td><td class="m">Differenz gleich</td><td class="m">&nbsp;</td><td class="m">☐</td><td class="m">&nbsp;</td></tr>
+          <tr><td>Abgleich DG nach 24 h</td><td class="m">Differenz gleich</td><td class="m">&nbsp;</td><td class="m">☐</td><td class="m">&nbsp;</td></tr>
+        </tbody>
+      </table>
+
+      <table class="liste">
+        <thead><tr><th>Geprüft durch</th><th>Datum</th><th>Unterschrift</th></tr></thead>
+        <tbody>
+          <tr><td style="height:12mm">&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>
+        </tbody>
+      </table>
+
+    </div>
+
+    <div class="schriftfeld">
+      <div class="z"><span class="lbl">Anlage / Benennung</span><span class="val gross">S0-Erfassung 3 WE</span></div>
+      <div class="z"><span class="lbl">Blattart</span><span class="val">Inbetriebnahme</span></div>
+      <div class="z"><span class="lbl">Blatt</span><span class="val">10 von 11</span></div>
+      <div class="z"><span class="lbl">Erstellt</span><span class="val">06.08.2026</span></div>
+      <div class="z"><span class="lbl">Änderung</span><span class="val">—</span></div>
+
+      <div class="z"><span class="lbl">Anlagenkennzeichen</span><span class="val">=S0</span></div>
+      <div class="z"><span class="lbl">Ort</span><span class="val">+ZS / +HWR</span></div>
+      <div class="z"><span class="lbl">Format</span><span class="val">A3</span></div>
+      <div class="z"><span class="lbl">Maßstab</span><span class="val">ohne</span></div>
+      <div class="z"><span class="lbl">Index</span><span class="val">a</span></div>
+
+      <div class="z"><span class="lbl">Prüfschritte</span><span class="val">19</span></div>
+      <div class="z"><span class="lbl">Protokollzeilen</span><span class="val">20</span></div>
+      <div class="z"><span class="lbl">Werkzeug</span><span class="val">Multimeter</span></div>
+      <div class="z"><span class="lbl">Software</span><span class="val">test_gpio · s0ctl</span></div>
+      <div class="z"><span class="lbl">Sprache</span><span class="val">de</span></div>
+
+      <div class="z" style="grid-column: 1 / span 2;"><span class="lbl">Blattinhalt</span><span class="val lang">Prüfschritte in verbindlicher Reihenfolge, Prüfprotokoll zum Ausfüllen</span></div>
+      <div class="z" style="grid-column: 3 / span 3;"><span class="lbl">Warnung</span><span class="val lang">Schritt 8 vor Schritt 13 ausführen — eine zu hohe Spannung an OUTx zerstört den GPIO unwiderruflich</span></div>
+
+      <div class="z sf-nobottom" style="grid-column: 1 / span 2;"><span class="lbl">Hinweis</span><span class="val lang">Reihenfolge einhalten — jeder Schritt setzt den vorigen voraus</span></div>
+      <div class="z sf-nobottom" style="grid-column: 3 / span 2;"><span class="lbl">Zeichnungsnummer</span><span class="val lang">S0-2026-010</span></div>
+      <div class="z sf-nobottom sf-noright"><span class="lbl">Ersetzt</span><span class="val">—</span></div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════
+     BLATT 11  —  Grenzen der Anlage
+     ════════════════════════════════════════════════════════════ -->
+<section class="blatt">
+  <div class="rahmen"></div>
+  <div class="feld">
+
+    <div class="kopf">
+      <span class="nr">= S0 &nbsp;·&nbsp; Blatt 11</span>
+      <h1>Grenzen der Anlage</h1>
+      <span class="sub">Was diese Anlage nicht leistet</span>
+    </div>
+
+    <div class="textflaeche zwei">
+
+      <h2 class="abschnitt">Nicht eichfähig</h2>
+      <p>Abrechnungsgrundlage bleibt der Zählerstand der geeichten
+      Eltako-Zähler -B1 bis -B3. Die Erfassung dient der unterjährigen Auswertung und
+      der Aufteilung, nicht der Abrechnung.</p>
+
+      <h2 class="abschnitt">Ausfallzeiten sind nicht rekonstruierbar</h2>
+      <p>Fällt die Rechnereinheit, die Optokopplerbaugruppe oder eine Versorgung aus,
+      fehlen die Impulse dieser Zeit dauerhaft. Es gibt keinen Zwischenspeicher im
+      Zähler, den man nachträglich auslesen könnte. Die Differenz zeigt sich beim
+      nächsten Abgleich mit dem Zählerstand.</p>
+
+      <h2 class="abschnitt">Die Herkunft des Stroms wird nicht gemessen</h2>
+      <p>Ein S0-Impuls sagt, dass eine Wattstunde verbraucht wurde — nicht, ob sie aus
+      dem Netz, aus der Photovoltaik oder aus dem Speicher kam. Die Zuordnung im
+      Jahresbericht ist ein Verteilschlüssel, kein Messwert, und wird dort als solcher
+      ausgewiesen.</p>
+
+      <h2 class="abschnitt">Grenze der Anbindung an -K2</h2>
+      <p>Die Anbindung an Home Assistant läuft über REST, weil in dieser Anlage kein
+      MQTT-Broker existiert. Über REST gesetzte Zustände hängen an keiner Integration
+      und sind nach einem Neustart von -K2 verschwunden, bis die Rechnereinheit erneut
+      veröffentlicht. Der Recorder-Verlauf bleibt davon unberührt.</p>
+      <p>Fehler beim Veröffentlichen werden protokolliert, aber nicht weitergereicht:
+      die Impulserfassung darf nicht stehenbleiben, weil -K2 gerade neu startet.</p>
+
+      <h2 class="abschnitt">Nicht erfasste Verbraucher</h2>
+      <p>Läuft ein Verbraucher hinter keinem der drei Wohnungszähler mit — etwa eine
+      Wärmepumpe oder der Allgemeinstrom —, übersteigt der Hausbezug die Summe der
+      Wohnungsverbräuche. Der Verteilschlüssel begrenzt deshalb den je Wohnung
+      zugerechneten Netzbezug auf deren tatsächlichen Verbrauch.</p>
+
+      <h2 class="abschnitt">Optionales Anzeigepanel</h2>
+      <p>Die Software unterstützt zusätzlich ein lokales Anzeigepanel an einem
+      seriellen EA-eDIP-Display (Modul <span class="m">s0counter/panel.py</span>,
+      Konfigurationsblock <span class="m">[panel]</span>, standardmäßig deaktiviert).
+      Diese Erweiterung ist <strong>nicht Teil</strong> des oben beschriebenen
+      Stromlaufplans und wird hier bewusst nicht mit Betriebsmittelkennzeichen, eigenem
+      Spannungskreis und Klemmenplan geführt — wer sie aufbaut, plant
+      Spannungsversorgung, Trennung zu -G2 und Verkabelung für die konkrete
+      Displayvariante eigenständig und dokumentiert sie in einer eigenen
+      Anlagendokumentation.</p>
+
+      <h2 class="abschnitt">Offene Punkte</h2>
+      <table class="liste">
+        <thead><tr><th>Nr.</th><th>Punkt</th><th>Blatt</th><th>Erledigt</th></tr></thead>
+        <tbody>
+          <tr><td class="k">1</td><td>Ausgangs-VCC von -A2 klären, danach -X2:5 belegen oder frei lassen</td><td class="m">4</td><td class="m">☐</td></tr>
+          <tr><td class="k">2</td><td>Galvanische Trennung von -A2 vor dem Anschluss messtechnisch bestätigen</td><td class="m">10</td><td class="m">☐</td></tr>
+          <tr><td class="k">3</td><td>Erstabgleich der Zählerstände nach 24 h Betrieb</td><td class="m">10</td><td class="m">☐</td></tr>
+          <tr><td class="k">4</td><td>Paare von W1 durchklingeln, beide Enden beschriften</td><td class="m">5</td><td class="m">☐</td></tr>
+          <tr><td class="k">5</td><td>Polung von W7 (rot/schwarz) vor dem Auflegen auf -G1 prüfen</td><td class="m">7</td><td class="m">☐</td></tr>
+        </tbody>
+      </table>
+
+      <h2 class="abschnitt">Mitgeltende Unterlagen</h2>
+      <table class="liste">
+        <thead><tr><th>Dokument</th><th>Fundstelle</th></tr></thead>
+        <tbody>
+          <tr><td>Anlagenbeschreibung</td><td class="m">docs/ANLAGE.md</td></tr>
+          <tr><td>Befunde und Begründungen</td><td class="m">docs/BEFUNDE.md</td></tr>
+          <tr><td>Stromlaufplan, Textfassung</td><td class="m">anlage/docs/STROMLAUFPLAN.md</td></tr>
+          <tr><td>Datenblatt Zähler</td><td class="m">Eltako DSZ15D-3x80A, Hersteller</td></tr>
+        </tbody>
+      </table>
+
+    </div>
+
+    <div class="schriftfeld">
+      <div class="z"><span class="lbl">Anlage / Benennung</span><span class="val gross">S0-Erfassung 3 WE</span></div>
+      <div class="z"><span class="lbl">Blattart</span><span class="val">Grenzen</span></div>
+      <div class="z"><span class="lbl">Blatt</span><span class="val">11 von 11</span></div>
+      <div class="z"><span class="lbl">Erstellt</span><span class="val">06.08.2026</span></div>
+      <div class="z"><span class="lbl">Änderung</span><span class="val">—</span></div>
+
+      <div class="z"><span class="lbl">Anlagenkennzeichen</span><span class="val">=S0</span></div>
+      <div class="z"><span class="lbl">Ort</span><span class="val">+ZS / +HWR</span></div>
+      <div class="z"><span class="lbl">Format</span><span class="val">A3</span></div>
+      <div class="z"><span class="lbl">Maßstab</span><span class="val">ohne</span></div>
+      <div class="z"><span class="lbl">Index</span><span class="val">a</span></div>
+
+      <div class="z"><span class="lbl">Offene Punkte</span><span class="val">5</span></div>
+      <div class="z"><span class="lbl">Eichfähig</span><span class="val">nein</span></div>
+      <div class="z"><span class="lbl">Abrechnung</span><span class="val">Zählerstand</span></div>
+      <div class="z"><span class="lbl">Anbindung</span><span class="val">REST</span></div>
+      <div class="z"><span class="lbl">Sprache</span><span class="val">de</span></div>
+
+      <div class="z" style="grid-column: 1 / span 2;"><span class="lbl">Blattinhalt</span><span class="val lang">Grenzen der Erfassung, optionales Anzeigepanel, offene Punkte, mitgeltende Unterlagen</span></div>
+      <div class="z" style="grid-column: 3 / span 3;"><span class="lbl">Wesentlich</span><span class="val lang">Die Anlage ist nicht eichfähig — Abrechnungsgrundlage bleibt der Zählerstand der geeichten Zähler</span></div>
+
+      <div class="z sf-nobottom" style="grid-column: 1 / span 2;"><span class="lbl">Ende der Zeichnung</span><span class="val lang">Zähleranlage: Blätter 1 bis 11</span></div>
+      <div class="z sf-nobottom" style="grid-column: 3 / span 2;"><span class="lbl">Zeichnungsnummer</span><span class="val lang">S0-2026-011</span></div>
+      <div class="z sf-nobottom sf-noright"><span class="lbl">Ersetzt</span><span class="val">—</span></div>
+    </div>
+
+  </div>
+</section>
+
+
+</body>
+</html>

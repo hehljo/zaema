@@ -1,0 +1,12 @@
+[Unit]
+Description=Naechtliche Sicherung des S0-Zaehlers
+
+[Timer]
+OnCalendar=*-*-* 03:20:00
+# Streuung, damit nicht alle Timer gleichzeitig die NAS aufwecken.
+RandomizedDelaySec=20min
+# Nachholen, wenn der Pi zur Uhrzeit aus war.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,212 @@
+# Konfiguration des S0-Zählers
+# Nach jeder Änderung: sudo systemctl restart s0counter
+# Prüfen ohne Neustart: sudo s0ctl -c /etc/s0counter/config.toml status
+
+[general]
+database = "/var/lib/s0counter/s0counter.sqlite3"
+http_host = "0.0.0.0"
+http_port = 8080
+
+# Wie oft die Stände nach außen gemeldet werden. Die Impulse selbst werden
+# unabhängig davon sofort gespeichert.
+publish_interval_seconds = 30
+
+# Nur noch Rückfall für Zähler, die in der Datenbank stehen, aber nicht mehr
+# in dieser Datei — etwa nach einem Umbau. Der wirksame Wert wird je Zähler
+# aus dessen min_power_w berechnet, siehe unten.
+power_timeout_seconds = 180
+
+
+# --- Zähler --------------------------------------------------------------
+# gpio ist die BCM-Nummer, nicht die Nummer des Steckerpins.
+#   GPIO17 = physischer Pin 11
+#   GPIO27 = physischer Pin 13
+#   GPIO22 = physischer Pin 15
+#
+# active_low = true passt zu einem Optokoppler, der während des Impulses
+# gegen GND zieht. Zählt der Dienst bei inaktivem statt aktivem Eingang,
+# hier auf false stellen.
+#
+# Alle Werte gelten je Zähler; die Vorgaben passen zu einem Eltako
+# DSZ15D-3x80A. Zähler mit verschiedenen Impulsraten dürfen gemischt werden.
+#
+#   pulses_per_kwh        steht auf dem Zähler aufgedruckt. EN 62053-31 gibt
+#                         die Rate nicht vor, sie ist Herstellersache: neben
+#                         den verbreiteten 1000 gibt es auch 10, 100, 500
+#                         und 2000. Ein falscher Wert verfälscht jede kWh.
+#
+#   max_plausible_power_w Leistung, oberhalb derer ein Impulsabstand als
+#                         Einstreuung gilt. 60000 entspricht den rund 55 kW,
+#                         die ein DSZ15D dreiphasig führen kann. Bei einem
+#                         einphasigen 32-A-Zähler sind eher 8000 richtig —
+#                         sonst laufen Störimpulse als echter Verbrauch mit.
+#
+#   min_power_w           Dauerlast, unterhalb derer keine Momentanleistung
+#                         mehr angezeigt wird. Daraus folgt der Timeout: bei
+#                         1000 Imp/kWh und 20 W sind das die bisherigen
+#                         180 s, bei 100 Imp/kWh automatisch 1800 s. Wer
+#                         stattdessen eine feste Sekundenzahl einträgt,
+#                         bekommt bei anderer Impulsrate eine Wohnung, die
+#                         trotz Grundlast dauerhaft 0 W meldet.
+
+[meters.eg]
+name = "Wohnung EG"
+gpio = 17
+pulses_per_kwh = 1000
+active_low = true
+bounce_ms = 10
+max_plausible_power_w = 60000
+min_power_w = 20
+
+[meters.og]
+name = "Wohnung OG"
+gpio = 27
+pulses_per_kwh = 1000
+active_low = true
+bounce_ms = 10
+max_plausible_power_w = 60000
+min_power_w = 20
+
+[meters.dg]
+name = "Wohnung DG"
+gpio = 22
+pulses_per_kwh = 1000
+active_low = true
+bounce_ms = 10
+max_plausible_power_w = 60000
+min_power_w = 20
+
+
+# --- Hausbilanz ----------------------------------------------------------
+# Zeichnet auf, wie viel das Haus insgesamt aus dem Netz bezieht. Nur damit
+# lässt sich der Netzbezug später auf die Wohnungen aufteilen.
+#
+# Bei 60 s Abtastung entstehen rund 500.000 Zeilen im Jahr, etwa 35 MB.
+
+[balance]
+enabled = false
+database = "/var/lib/s0counter/balance.sqlite3"
+sample_interval_seconds = 60
+
+# Fenstergröße der Abrechnung. 900 s sind der übliche Wert. Kleiner heißt
+# genauer, aber empfindlicher gegen Ausfälle; er darf nie kleiner sein als
+# sample_interval_seconds.
+allocation_interval_seconds = 900
+
+
+# --- Sonnenbatterie ------------------------------------------------------
+# Bevorzugte Quelle: das Gerät antwortet im Heimnetz ohne Anmeldung und
+# ohne Umweg über Home Assistant.
+# Prüfen: curl http://192.168.0.50/api/v2/status
+
+[sonnenbatterie]
+enabled = false
+host = "192.168.0.50"
+timeout = 10
+# Seriennummer, nur für Home Assistant als Zweitquelle: die Entitäten
+# heißen sensor.sonnenbatterie_<seriennummer>_…
+serial = ""
+
+
+# --- Verlauf der Rechnerwerte --------------------------------------------
+# Temperatur, Auslastung, Arbeitsspeicher und Belegung der Karte als
+# Zeitreihe, für die Diagramme im Dashboard. Alte Werte werden verdichtet
+# (60 s roh für 7 Tage, dann Viertelstunden für 90 Tage, dann Stunden
+# dauerhaft) — die Datei bleibt dadurch bei rund 20 MB im Jahr.
+
+[history]
+enabled = true
+database = "/var/lib/s0counter/history.sqlite3"
+sample_interval_seconds = 60
+
+
+# --- Home Assistant ------------------------------------------------------
+# Doppelte Rolle:
+#   1. Ersatzquelle für die Hausbilanz, falls die Sonnenbatterie schweigt
+#   2. Ziel für die Zählersensoren
+#
+# Token anlegen: Home Assistant öffnen, unten links auf den eigenen Namen,
+# Reiter Sicherheit, ganz unten Langlebige Zugriffstoken.
+#
+# Diese Datei enthält damit ein gültiges Token. Sie gehört root:s0counter
+# mit Modus 640 und niemals in ein Repository.
+
+[homeassistant]
+enabled = false
+url = "http://192.168.0.30:8123"
+token = ""
+prefix = "s0"
+timeout = 10
+
+# Daraus werden je Zähler zwei Sensoren:
+#   sensor.s0_eg_energy   in kWh, für das Energie-Dashboard
+#   sensor.s0_eg_power    in W
+
+
+# --- Anzeigepanel (optional, unfertig) -----------------------------------
+# Serielles EA-eDIP-Display, z.B. über USB-RS232. Am Display muss J20 auf
+# RS-232 stehen und DProt offen bleiben. Dieses Feature ist nicht Teil der
+# getesteten Anlage und nicht Teil der Anlagendokumentation unter docs/anlage/
+# — siehe s0counter/panel.py.
+#
+# button_gpio darf keinem Zähler gehören — jeder Tastendruck würde sonst
+# als Stromimpuls gezählt. -1 schaltet den Taster ab, dann wird nur über
+# den Touch bedient.
+
+[panel]
+enabled = false
+port = "/dev/ttyUSB0"
+baud = 57600
+button_gpio = 23
+blank_after_seconds = 120
+refresh_seconds = 5
+
+
+# --- Telegram ------------------------------------------------------------
+# Bot anlegen: in Telegram @BotFather anschreiben, /newbot, Namen wählen.
+# Das Token merken. Danach den eigenen Bot einmal anschreiben, sonst darf
+# er nicht zurückschreiben.
+#
+# Chat-ID ermitteln: @userinfobot anschreiben, oder nach dem ersten
+# Anschreiben des eigenen Bots:
+#   curl "https://api.telegram.org/bot<TOKEN>/getUpdates"
+#
+# Prüfen: sudo s0ctl telegram-test
+
+[telegram]
+enabled = false
+token = ""
+chat_id = ""
+timeout = 30
+
+
+# --- Jahresbericht -------------------------------------------------------
+# Erzeugt am 31.12. ein PDF je Wohnung mit dem zugeordneten Netzbezug.
+# Braucht [balance]. Ohne price_ct_per_kwh entfällt die Kostenrechnung und
+# es werden nur Kilowattstunden ausgewiesen.
+#
+# Von Hand:  sudo s0ctl report --year 2026 --send
+# Automatisch: systemctl enable --now s0counter-report.timer
+
+[report]
+enabled = false
+directory = "/var/lib/s0counter/berichte"
+price_ct_per_kwh = 0.0
+base_price_eur_per_year = 0.0
+landlord = ""
+
+
+# --- MQTT ----------------------------------------------------------------
+# In dieser Installation läuft kein Broker (geprüft 06.08.2026). Sobald
+# einer da ist — etwa das Mosquitto-Add-on —, ist dieser Weg dem REST-Weg
+# vorzuziehen: Discovery legt echte Entitäten an, die einen Neustart von
+# Home Assistant überstehen.
+
+[mqtt]
+enabled = false
+host = "127.0.0.1"
+port = 1883
+username = ""
+password = ""
+base_topic = "haus/energie"
+homeassistant_discovery = true

@@ -1,0 +1,26 @@
+[Unit]
+Description=S0-Zaehler auf die Synology sichern
+Documentation=file:/opt/s0counter/README.md
+After=network-online.target
+Wants=network-online.target
+# Ohne eingebundenes NAS bricht das Skript ohnehin ab, aber so wartet der
+# Dienst erst gar nicht auf ein Ziel, das nicht da ist.
+RequiresMountsFor=/mnt/synology
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/opt/s0counter/backup.sh
+
+# Ohne Zeitlimit wartet ein oneshot unbegrenzt. Belegt am 27.08.2026: eine
+# SQLite-Sicherung direkt auf die SMB-Freigabe hing 42 Minuten in den
+# Dateisperren und lief erst weiter, als sie von Hand beendet wurde. Der
+# nächste Timer-Lauf wäre dabei still übersprungen worden, weil der alte
+# Job noch stand. 20 Minuten sind reichlich für ein paar MB über SMB und
+# kurz genug, dass ein Hänger vor dem nächsten nächtlichen Lauf auffällt.
+TimeoutStartSec=1200
+
+# Schreibt nur ins Sicherungsziel und liest die Datenbanken.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true

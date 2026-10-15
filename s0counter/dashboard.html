@@ -1,0 +1,577 @@
+<!doctype html>
+<html lang="de" data-theme="hell">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Stromzähler</title>
+<style>
+/* ---------------------------------------------------------------------
+   Design Tokens. Rollennamen, keine Farbnamen — sonst heißt die dunkle
+   Fläche im hellen Thema "grau-900".
+   --------------------------------------------------------------------- */
+:root {
+  --step--1: clamp(0.79rem, 0.77rem + 0.10vw, 0.84rem);
+  --step-0:  clamp(1rem,    0.96rem + 0.18vw, 1.09rem);
+  --step-1:  clamp(1.26rem, 1.20rem + 0.31vw, 1.42rem);
+  --step-2:  clamp(1.59rem, 1.49rem + 0.50vw, 1.84rem);
+  --step-3:  clamp(2.00rem, 1.84rem + 0.79vw, 2.39rem);
+
+  --space-3xs: 0.25rem; --space-2xs: 0.5rem; --space-xs: 0.75rem;
+  --space-s: 1rem; --space-m: 1.5rem; --space-l: 2.25rem;
+
+  --page-max: 76rem;
+  --gutter: clamp(1rem, 4vw, 2.5rem);
+  --radius: 0.75rem;
+  --dur-fast: 140ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Helles Thema — Standard. Kontraste gegen den DUNKELSTEN Grund gerechnet
+   (--surface-sunken), weil dort jedes Paar am knappsten steht:
+   ink 14.6:1 · ink-soft 6.4:1 · ink-faint 4.55:1 · accent 5.0:1 · warn 5.6:1.
+   --ink-faint lag mit #6B7477 bei 3.95:1 und ist deshalb nachgezogen. */
+:root, [data-theme="hell"] {
+  --surface: #F4F5F3;
+  --surface-raised: #FFFFFF;
+  --surface-sunken: #E8EAE6;
+  --ink: #16191A;
+  --ink-soft: #4C5457;
+  --ink-faint: #656A68;
+  --line: #D3D8D5;
+  --accent: #1F6E5B;
+  --accent-soft: #DCEBE5;
+  --warn: #8A4B12;
+  /* Für die dritte Stufe der Belastbarkeitsbewertung. 5.9:1 gegen
+     --surface-raised, geprüft wie die übrigen Paare oben. */
+  --alarm: #A32A1E;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.05), 0 4px 12px rgb(0 0 0 / 0.04);
+}
+
+/* Dunkles Thema — eigene Werte, nicht invertiert.
+   ink 15.1:1 · ink-soft 7.1:1 · ink-faint 4.8:1 gegen --surface-raised. */
+[data-theme="dunkel"] {
+  --surface: #101413;
+  --surface-raised: #1A201E;
+  --surface-sunken: #0A0D0C;
+  --ink: #EDF0EE;
+  --ink-soft: #A8B2AE;
+  --ink-faint: #838D89;
+  --line: #2E3735;
+  --accent: #58C4A4;
+  --accent-soft: #1B322B;
+  --warn: #E0A264;
+  --alarm: #F08A7A;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 4px 12px rgb(0 0 0 / 0.3);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="hell"]) {
+    --surface: #101413;
+    --surface-raised: #1A201E;
+    --surface-sunken: #0A0D0C;
+    --ink: #EDF0EE;
+    --ink-soft: #A8B2AE;
+    --ink-faint: #838D89;
+    --line: #2E3735;
+    --accent: #58C4A4;
+    --accent-soft: #1B322B;
+    --warn: #E0A264;
+    --alarm: #F08A7A;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 4px 12px rgb(0 0 0 / 0.3);
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding-block: var(--space-m) calc(var(--space-l) + env(safe-area-inset-bottom));
+  padding-inline: var(--gutter);
+  background: var(--surface);
+  color: var(--ink);
+  font: var(--step-0)/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-synthesis-weight: none;
+  -webkit-text-size-adjust: 100%;
+}
+
+.wrap { width: min(100%, var(--page-max)); margin-inline: auto; }
+
+/* --- Kopf ------------------------------------------------------------ */
+.kopf {
+  display: flex; flex-wrap: wrap; align-items: baseline;
+  gap: var(--space-2xs) var(--space-s);
+  margin-block-end: var(--space-m);
+}
+.kopf__titel { margin: 0; font-size: var(--step-2); font-weight: 650; letter-spacing: -0.02em; }
+.kopf__meta { margin: 0; color: var(--ink-soft); font-size: var(--step--1); font-variant-numeric: tabular-nums; }
+.kopf__werkzeuge { margin-inline-start: auto; display: flex; gap: var(--space-2xs); }
+/* Nebeninformation, aber lesbar: --ink-faint liegt gerechnet bei 5,03:1
+   im hellen und 5,42:1 im dunklen Thema. Der Trenner steht im ::before,
+   damit er mitverschwindet, solange die Fassung noch nicht geladen ist. */
+.kopf__fassung { color: var(--ink-faint); }
+.kopf__fassung:not(:empty)::before { content: " · "; }
+
+.knopf {
+  min-height: 44px; min-width: 44px;
+  padding-inline: var(--space-xs);
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-3xs);
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--surface-raised); color: var(--ink-soft);
+  font: inherit; font-size: var(--step--1); cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.knopf:hover { background: var(--surface-sunken); color: var(--ink); }
+.knopf[aria-pressed="true"] { background: var(--accent-soft); color: var(--ink); border-color: var(--accent); }
+
+/* Die Export-Knöpfe sind Links (ein Download, kein Vorgang im Browser) und
+   erben deshalb nichts von der Schriftfarbe des Themas — ohne diese Zeile
+   stünden sie im Linkblau des Browsers. `--klein` nur bei der Schrift: die
+   44 px Trefferfläche bleiben. */
+.knopf { text-decoration: none; }
+.knopf--klein { padding-inline: var(--space-2xs); }
+
+.export {
+  display: flex; flex-wrap: wrap; gap: var(--space-2xs);
+  margin-block: var(--space-s) 0;
+}
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* --- Raster ---------------------------------------------------------- */
+/* Der Anteil (33%) muss ins min(), sobald mehr als zwei Spalten möglich
+   sind — sonst misst jede Spalte an der vollen Rasterbreite und läuft
+   auf schmalen Geräten seitlich über.
+
+   Das `33%` allein reichte allerdings nicht: am Telefon (390 px) ergab es
+   eine Mindestbreite von rund 118 px, also drei Spalten dort, wo eine
+   hingehört. Die Kachelköpfe wurden auf 85 px gequetscht und brachen die
+   Titel mitten im Wort ("ERZEUGUN/G"). Die Untergrenze von 11rem hält die
+   Spalten breit genug für einen Titel neben dem 44-px-Knopf; unterhalb
+   davon fällt das Raster auf eine Spalte zurück. */
+.raster {
+  display: grid; gap: var(--space-s);
+  grid-template-columns: repeat(auto-fill,
+                                minmax(min(100%, 15rem, max(11rem, 33%)), 1fr));
+  margin-block-end: var(--space-m);
+}
+
+.karte {
+  background: var(--surface-raised);
+  border: 1px solid var(--line); border-radius: var(--radius);
+  padding: var(--space-s);
+  box-shadow: var(--shadow);
+  min-width: 0;
+}
+.karte__kopf {
+  display: flex; align-items: center; gap: var(--space-2xs);
+  margin-block-end: var(--space-2xs);
+  min-width: 0;
+}
+.karte__name {
+  margin: 0; font-size: var(--step--1); font-weight: 600;
+  color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.06em;
+  /* Ohne min-width: 0 kann die Überschrift nicht unter ihre Inhaltsbreite
+     schrumpfen und schiebt den Umschalter aus der Kachel. Sichtbar erst ab
+     etwa 320 px, wo Titel und 44-px-Knopf zusammen zu breit werden.
+
+     break-word statt anywhere: `anywhere` trennt auch dann mitten im Wort,
+     wenn daneben noch Platz ist — am Telefon stand "WOHNU/NG EG" und
+     "ERZEUGUN/G", obwohl beides in die Zeile gepasst hätte. `break-word`
+     bricht nur, wenn ein Wort sonst überliefe, und das ist hier gemeint. */
+  min-width: 0; overflow-wrap: break-word;
+}
+.karte__wert {
+  font-size: var(--step-3); font-weight: 650; line-height: 1.1;
+  letter-spacing: -0.03em; font-variant-numeric: tabular-nums;
+  /* Der Wert samt Einheit soll zusammenbleiben: "8,291 kW/h" über zwei
+     Zeilen liest sich als Kilowatt pro Stunde und ist damit die falsche
+     Einheit. Passt es nicht, wird die Kachel eben breiter umbrochen. */
+  overflow-wrap: normal;
+}
+/* white-space: nowrap hält "kWh" zusammen — ohne das brach die Einheit am
+   Telefon zu "kW" + "h" um, was eine andere physikalische Größe ist. */
+.karte__einheit {
+  font-size: var(--step-1); font-weight: 500; color: var(--ink-soft);
+  margin-inline-start: 0.15em; white-space: nowrap;
+}
+/* Netzanteil hinter der Verbrauchszahl. Farblich abgesetzt, damit die
+   Klammer nicht mit der Einheit verschmilzt — aber deutlich kleiner als der
+   Hauptwert, sonst konkurrieren zwei Zahlen um dieselbe Stelle.
+   Kontrast von --accent: 6.1:1 hell auf --surface-raised, 7.8:1 dunkel.
+   `nowrap` hält "(0 W Netz)" zusammen: eine Klammer, die über zwei Zeilen
+   bricht, liest sich als zwei Angaben. */
+.karte__zusatz {
+  font-size: var(--step-0); font-weight: 550; color: var(--accent);
+  margin-inline-start: 0.4em; white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Warnzustand: die Farbe ist der Zusatz, nicht die Aussage — der Grund
+   steht als Text in der Kachel und für Vorlesehilfen im Kopf. */
+.karte[data-zustand="warn"] { border-color: var(--warn); }
+.karte[data-zustand="warn"] .karte__wert { color: var(--warn); }
+
+/* --- Verlauf in der Kachel ------------------------------------------- */
+
+.karte__schalter {
+  margin-inline-start: auto;
+  min-width: 44px; min-height: 44px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line); border-radius: calc(var(--radius) - 0.25rem);
+  background: transparent; color: var(--ink-faint);
+  cursor: pointer; padding: 0;
+  transition: color var(--dur-fast) var(--ease-out),
+              border-color var(--dur-fast) var(--ease-out);
+}
+.karte__schalter:hover { color: var(--ink); border-color: var(--ink-faint); }
+.karte__schalter[aria-pressed="true"] {
+  color: var(--accent); border-color: var(--accent); background: var(--accent-soft);
+}
+.karte__schalter svg { inline-size: 1.1rem; block-size: 1.1rem; display: block; }
+
+.karte__verlauf[hidden] { display: none; }
+.karte__verlauf { margin-block-start: var(--space-2xs); }
+
+/* Höhe über aspect-ratio: die Kurve behält ihr Verhältnis, egal wie breit
+   die Kachel gerade ist — kein fester Pixelwert, der auf dem Telefon
+   quetscht und am Breitbild verloren wirkt. */
+.diagramm {
+  inline-size: 100%; aspect-ratio: 16 / 7;
+  display: block; overflow: visible;
+}
+.diagramm__flaeche { fill: var(--accent); opacity: 0.12; }
+.diagramm__linie {
+  fill: none; stroke: var(--accent); stroke-width: 1.5;
+  stroke-linejoin: round; stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+.diagramm__band { fill: var(--accent); opacity: 0.15; }
+.diagramm__achse {
+  stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke;
+}
+.diagramm__marke {
+  fill: var(--ink-faint); font-size: 0.62rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.zeitwahl {
+  display: flex; flex-wrap: wrap; gap: var(--space-3xs);
+  margin-block-start: var(--space-2xs);
+}
+.zeitwahl__knopf {
+  min-height: 44px; padding-inline: var(--space-2xs);
+  border: 1px solid var(--line); border-radius: calc(var(--radius) - 0.25rem);
+  background: transparent; color: var(--ink-soft);
+  font: inherit; font-size: var(--step--1); cursor: pointer;
+  white-space: nowrap;
+  /* Die Trefferfläche ist die Untergrenze, nicht der Wunsch: mit
+     `flex: 1 1 auto; min-width: 0` schrumpften diese Knöpfe auf 38 px.
+     Wachsen dürfen sie, schrumpfen nur bis 44 px — darunter bricht die
+     Zeile um, statt das Ziel zu verkleinern. */
+  flex: 1 0 auto; min-width: 44px;
+}
+.zeitwahl__knopf[aria-pressed="true"] {
+  background: var(--accent-soft); color: var(--ink); border-color: var(--accent);
+  font-weight: 600;
+}
+
+.verlauf__fuss {
+  display: flex; flex-wrap: wrap; justify-content: space-between;
+  gap: var(--space-3xs) var(--space-2xs);
+  margin-block-start: var(--space-3xs);
+  font-size: var(--step--1); color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+.verlauf__leer {
+  padding-block: var(--space-s);
+  color: var(--ink-faint); font-size: var(--step--1); text-align: center;
+}
+/* flex-wrap ist der Notausgang: erst umbrechen, niemals überlaufen.
+   Ohne min-width: 0 kann das Kind nicht unter seine Inhaltsbreite
+   schrumpfen und sprengt die Karte seitlich auf — sichtbar erst ab
+   etwa 320px, wo die Beschriftung neben der Zahl keinen Platz mehr hat. */
+.karte__zeile {
+  display: flex; flex-wrap: wrap; justify-content: space-between;
+  gap: var(--space-3xs) var(--space-2xs);
+  margin-block-start: var(--space-2xs); padding-block-start: var(--space-2xs);
+  border-block-start: 1px solid var(--line);
+  font-size: var(--step--1); color: var(--ink-soft);
+}
+.karte__zeile > * { min-width: 0; overflow-wrap: anywhere; }
+.karte__zeile b { font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+/* Punkt zeigt, ob der Kanal gerade Impulse liefert. Farbe ist nie das
+   einzige Merkmal — der Titel nennt den Zustand im Klartext. */
+.puls {
+  inline-size: 0.55rem; block-size: 0.55rem; border-radius: 50%;
+  background: var(--ink-faint); flex: none;
+}
+.puls[data-aktiv="ja"] { background: var(--accent); }
+
+.abschnitt { margin-block-end: var(--space-2xs); }
+
+/* Überschrift und Summe teilen sich eine Zeile: die Trennlinie füllt den
+   Platz dazwischen und schrumpft als einziges Element mit. Bei zu wenig
+   Breite bricht die Summe um, statt die Zeile aufzusprengen. */
+/* Klappbare Abschnitte über natives <details>/<summary>: Tastatur, Enter,
+   Screenreader und die Browsersuche funktionieren damit ohne eigenes ARIA.
+   Ein nachgebauter Knopf müsste all das selbst mitbringen. */
+.abschnitt { margin-block-end: var(--space-m); }
+.abschnitt[hidden] { display: none; }
+
+.abschnitt__kopf {
+  display: flex; flex-wrap: wrap; align-items: baseline;
+  gap: var(--space-3xs) var(--space-2xs);
+  margin-block-end: var(--space-2xs);
+  /* 44 px Trefferfläche wie bei jedem anderen Bedienelement. */
+  min-height: 44px; align-content: center;
+  padding-inline: var(--space-2xs);
+  margin-inline: calc(var(--space-2xs) * -1);
+  border-radius: var(--radius);
+  cursor: pointer;
+  list-style: none;   /* Standarddreieck weg, eigener Marker unten */
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.abschnitt__kopf::-webkit-details-marker { display: none; }
+.abschnitt__kopf:hover { background: var(--surface-sunken); }
+
+/* Eigener Marker: dreht sich beim Aufklappen. Als ::before am Titel, damit
+   er in der Grundlinie mitläuft und beim Umbruch nicht allein stehenbleibt. */
+.abschnitt__titel::before {
+  content: "▸";
+  display: inline-block;
+  margin-inline-end: var(--space-3xs);
+  color: var(--ink-faint);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.abschnitt[open] .abschnitt__titel::before { transform: rotate(90deg); }
+
+@media (prefers-reduced-motion: reduce) {
+  .abschnitt__titel::before, .abschnitt__kopf { transition: none; }
+}
+
+/* Eingeklappt zählt der Überblick, nicht die Herkunft: Quelle und
+   Zeitstempel treten zurück, dafür erscheint die Werteliste. Ausgeklappt
+   umgekehrt — dort steht die Herkunft ohnehin bei jeder Kachel. */
+.abschnitt:not([open]) .abschnitt__quelle,
+.abschnitt:not([open]) .abschnitt__summe { display: none; }
+.abschnitt[open] .abschnitt__kurz { display: none; }
+
+.abschnitt__kurz {
+  margin: 0; font-size: var(--step--1); color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  min-width: 0; overflow-wrap: break-word;
+}
+.abschnitt__kurz:empty { display: none; }
+/* Trennt die Einträge. Die Leerzeichen stehen als geschützte Zeichen im
+   content: gewöhnliche Leerzeichen am Rand eines ::before werden beim
+   Umbruch verworfen, und dann klebte "567 W" an "OG:". */
+.abschnitt__kurz-teil + .abschnitt__kurz-teil::before {
+  content: "\00a0· "; color: var(--ink-faint);
+}
+.abschnitt__titel {
+  margin: 0; font-size: var(--step--1); font-weight: 600;
+  color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.08em;
+}
+.abschnitt__quelle {
+  font-size: var(--step--1); color: var(--ink-faint);
+  white-space: nowrap;
+}
+.abschnitt__quelle:empty { display: none; }
+.abschnitt__linie {
+  flex: 1 1 var(--space-s); min-width: var(--space-s);
+  border-block-start: 1px solid var(--line);
+  align-self: center;
+}
+.abschnitt__summe {
+  font-size: var(--step-0); font-weight: 650; color: var(--ink);
+  font-variant-numeric: tabular-nums; letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+.abschnitt__summe:empty { display: none; }
+
+.hinweis {
+  padding: var(--space-xs) var(--space-s);
+  border: 1px solid var(--line); border-inline-start: 3px solid var(--warn);
+  border-radius: var(--radius); background: var(--surface-raised);
+  color: var(--ink-soft); font-size: var(--step--1);
+  margin-block-end: var(--space-s);
+}
+.hinweis:empty { display: none; }
+
+/* --- Abrechnung ------------------------------------------------------- */
+
+.abrechnung__wahl {
+  display: flex; flex-direction: column; gap: var(--space-2xs);
+  margin-block-end: var(--space-2xs);
+}
+
+/* Beschriftung vor einer Knopfreihe. Bei drei Jahren und zwölf Monaten
+   stünden sonst siebzehn gleich aussehende Knöpfe nebeneinander und "2026"
+   verschwände zwischen "30 Tage" und "August 2026". */
+.zeitwahl__marke {
+  align-self: center;
+  padding-inline-end: var(--space-3xs);
+  color: var(--ink-faint); font-size: var(--step--1);
+  text-transform: uppercase; letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+/* Die Bewertung der Belastbarkeit. Drei Stufen mit eigener Farbe: eine
+   Abrechnung über zwei Stunden darf nicht aussehen wie eine über ein Jahr,
+   auch wenn beide Zahlen richtig sind. */
+.urteil {
+  padding: var(--space-xs) var(--space-s);
+  border: 1px solid var(--line); border-inline-start: 3px solid var(--accent);
+  border-radius: var(--radius); background: var(--surface-raised);
+  color: var(--ink-soft); font-size: var(--step--1);
+  margin-block: 0 var(--space-s);
+}
+.urteil:empty { display: none; }
+.urteil[data-stufe="eingeschraenkt"] { border-inline-start-color: var(--warn); }
+.urteil[data-stufe="unbrauchbar"] { border-inline-start-color: var(--alarm); }
+.urteil__kopf { font-weight: 600; color: var(--ink); }
+.urteil__grund { display: block; margin-block-start: var(--space-3xs); }
+
+/* Erklärung des gewählten Verteilmodells. Bewusst ohne Rahmen und ohne
+   Warnfarbe: sie steht immer da und ist Erläuterung, kein Befund — sonst
+   stumpft sie neben dem Urteil darüber ab. */
+.modellinfo {
+  margin-block: 0 var(--space-s);
+  color: var(--ink-soft); font-size: var(--step--1);
+  max-inline-size: 68ch;
+}
+.modellinfo:empty { display: none; }
+.modellinfo__rechnung { display: block; margin-block-start: var(--space-3xs); }
+.modellinfo__empfehlung {
+  display: block; margin-block-start: var(--space-3xs); color: var(--ink);
+}
+.modellinfo__marke { font-weight: 600; }
+
+.fussnote {
+  margin-block-start: var(--space-2xs);
+  color: var(--ink-faint); font-size: var(--step--1);
+}
+.fussnote:empty { display: none; }
+
+/* Aufteilung PV/Netz als Balken — der Vergleich zwischen den Wohnungen ist
+   der eigentliche Zweck, und den liest man an Längen schneller ab als an
+   Zahlen. Die Zahlen stehen trotzdem darunter. */
+.anteil {
+  display: flex; block-size: 0.5rem; margin-block: var(--space-2xs);
+  border-radius: 999px; overflow: hidden; background: var(--surface-sunken);
+}
+.anteil__teil { block-size: 100%; }
+.anteil__teil[data-art="solar"] { background: var(--warn); }
+.anteil__teil[data-art="netz"] { background: var(--accent); }
+
+.fuss {
+  margin-block-start: var(--space-m); padding-block-start: var(--space-s);
+  border-block-start: 1px solid var(--line);
+  color: var(--ink-faint); font-size: var(--step--1);
+  display: flex; flex-wrap: wrap; gap: var(--space-2xs) var(--space-s);
+}
+.fuss__zahl { font-variant-numeric: tabular-nums; }
+
+.nurlesen {
+  position: absolute; inline-size: 1px; block-size: 1px;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="kopf">
+    <h1 class="kopf__titel" data-feld="titel"></h1>
+    <p class="kopf__meta"><span data-feld="stand"></span><span
+       class="kopf__fassung" data-feld="fassung" title=""></span></p>
+    <div class="kopf__werkzeuge">
+      <div class="zeitwahl" data-liste="zeitwahl" role="group"
+           aria-label="Zeitraum der Verlaufsdiagramme"></div>
+      <button type="button" class="knopf" data-schalter="thema" aria-pressed="false">
+        <span data-feld="thema-text"></span>
+      </button>
+    </div>
+  </header>
+
+  <p class="hinweis" role="status" aria-live="polite" data-feld="hinweis"></p>
+
+  <details class="abschnitt" data-bereich="wohnungen">
+    <summary class="abschnitt__kopf">
+      <h2 class="abschnitt__titel" id="t-wohnungen" data-feld="titel-wohnungen"></h2>
+      <span class="abschnitt__quelle" data-feld="quelle-wohnungen"></span>
+      <span class="abschnitt__linie" aria-hidden="true"></span>
+      <p class="abschnitt__summe" data-feld="summe-wohnungen"></p>
+      <p class="abschnitt__kurz" data-feld="kurz-wohnungen"></p>
+    </summary>
+    <div class="raster" data-liste="zaehler"></div>
+  </details>
+
+  <details class="abschnitt" data-bereich="haus" hidden>
+    <summary class="abschnitt__kopf">
+      <h2 class="abschnitt__titel" id="t-haus" data-feld="titel-haus"></h2>
+      <span class="abschnitt__quelle" data-feld="quelle-haus"></span>
+      <span class="abschnitt__linie" aria-hidden="true"></span>
+      <p class="abschnitt__summe" data-feld="summe-haus"></p>
+      <p class="abschnitt__kurz" data-feld="kurz-haus"></p>
+    </summary>
+    <div class="raster" data-liste="haus"></div>
+  </details>
+
+  <details class="abschnitt" data-bereich="abrechnung" hidden>
+    <summary class="abschnitt__kopf">
+      <h2 class="abschnitt__titel" id="t-abrechnung"
+          data-feld="titel-abrechnung"></h2>
+      <span class="abschnitt__quelle" data-feld="quelle-abrechnung"></span>
+      <span class="abschnitt__linie" aria-hidden="true"></span>
+      <p class="abschnitt__summe" data-feld="summe-abrechnung"></p>
+      <p class="abschnitt__kurz" data-feld="kurz-abrechnung"></p>
+    </summary>
+    <div class="abrechnung__wahl">
+      <div class="zeitwahl" data-liste="abrechnung-zeitraum" role="group"
+           aria-label="Zeitraum der Abrechnung"></div>
+      <div class="zeitwahl" data-liste="abrechnung-modell" role="group"
+           aria-label="Verteilmodell"></div>
+    </div>
+    <p class="modellinfo" data-feld="abrechnung-modell-info"></p>
+    <p class="urteil" data-feld="abrechnung-urteil" role="status"
+       aria-live="polite"></p>
+    <div class="raster" data-liste="abrechnung"></div>
+    <p class="fussnote" data-feld="abrechnung-rest"></p>
+    <p class="export" data-bereich="export">
+      <a class="knopf knopf--klein" data-feld="export-pdf" download>
+        <span data-feld="export-pdf-text"></span>
+      </a>
+      <a class="knopf knopf--klein" data-feld="export-csv" download>
+        <span data-feld="export-csv-text"></span>
+      </a>
+    </p>
+  </details>
+
+  <details class="abschnitt" data-bereich="system" hidden>
+    <summary class="abschnitt__kopf">
+      <h2 class="abschnitt__titel" id="t-system" data-feld="titel-system"></h2>
+      <span class="abschnitt__quelle" data-feld="quelle-system"></span>
+      <span class="abschnitt__linie" aria-hidden="true"></span>
+      <p class="abschnitt__summe" data-feld="summe-system"></p>
+      <p class="abschnitt__kurz" data-feld="kurz-system"></p>
+    </summary>
+    <div class="raster" data-liste="system"></div>
+  </details>
+
+  <footer class="fuss" data-liste="fuss"></footer>
+
+</div>
+
+<script type="module" src="./dashboard.js"></script>
+</body>
+</html>

@@ -1,0 +1,48 @@
+[Unit]
+Description=Eltako S0 Impulszaehler
+Documentation=file:/opt/s0counter/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=s0counter
+Group=s0counter
+# gpio für die Zählereingänge, dialout nur nötig, falls das optionale
+# Anzeigepanel ([panel] in config.toml, standardmäßig aus) aktiviert wird.
+SupplementaryGroups=gpio dialout
+
+# Das Arbeitsverzeichnis muss dem Dienstbenutzer gehören: lgpio legt seine
+# Notify-Datei .lgd-nfy* über einen *relativen* Pfad an. Unter
+# /opt/s0counter (root:root) scheitert das mit EACCES, gpiozero verwirft
+# die lgpio-Factory daraufhin still und fällt auf "native" zurück — die
+# arbeitet über das sysfs-Interface, das es ab Trixie nicht mehr gibt.
+# Der Dienst stirbt dann mit "OSError: [Errno 22] Invalid argument", ohne
+# dass die eigentliche Ursache irgendwo auftaucht.
+WorkingDirectory=/var/lib/s0counter
+
+# Weil das Arbeitsverzeichnis nicht mehr /opt/s0counter ist, findet
+# "python -m s0counter.main" das Paket nur noch über PYTHONPATH.
+Environment=PYTHONPATH=/opt/s0counter
+# Die Factory fest vorgeben, statt sie erraten zu lassen. Schlägt lgpio
+# fehl, soll der Dienst mit klarer Meldung stehenbleiben und nicht
+# stillschweigend auf eine untaugliche Factory ausweichen.
+Environment=GPIOZERO_PIN_FACTORY=lgpio
+
+ExecStartPre=/opt/s0counter/venv/bin/python -m s0counter.main -c /etc/s0counter/config.toml --check-config
+ExecStart=/opt/s0counter/venv/bin/python -m s0counter.main -c /etc/s0counter/config.toml
+Restart=on-failure
+RestartSec=5
+
+# Der Dienst braucht nur GPIO, sein Datenverzeichnis und Netzzugang.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+ReadWritePaths=/var/lib/s0counter
+
+[Install]
+WantedBy=multi-user.target

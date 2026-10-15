@@ -1,0 +1,133 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  python:
+    name: Python-Suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # 3.11 ist die Untergrenze wegen `tomllib`. Die Anlage läuft auf
+      # Trixie (3.13); beide werden geprüft, damit ein Rückbau auf ein
+      # älteres Raspberry Pi OS nicht still bricht.
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+
+      - run: pip install pytest paho-mqtt
+
+      # `gpiozero` und `lgpio` fehlen hier absichtlich: sie brauchen echte
+      # Hardware. Läuft die Suite trotzdem durch, ist das der Beleg für die
+      # Zusage aus der README — alles außer `GpioBinding.setup()` ist ohne
+      # GPIO testbar. Ein neuer Import von `gpiozero` außerhalb dieser einen
+      # Stelle lässt diesen Lauf scheitern, und genau das soll er.
+      # Untergrenze statt nur Exit-Code: ein Lauf, der die Hälfte der
+      # Dateien nicht sammelt, meldet sonst „alles grün" für das, was er
+      # zufällig gefunden hat. Die Zahl steht bewusst unter dem Ist-Stand
+      # (412 hier, 440 mit dem Anzeigepanel) — sie soll ein Wegbrechen
+      # ganzer Dateien fangen, nicht bei jedem neuen Test nachgezogen
+      # werden müssen.
+      #
+      # WAS HIER NICHT GEMESSEN WIRD: `tests/test_panel.py` (28 Tests)
+      # braucht das Display-Paket `edip320`, das nicht in diesem Repo liegt.
+      # `pytest.importorskip` überspringt die Datei lautlos, wenn es fehlt —
+      # hier fehlt es immer. Das Anzeigepanel am eDIP320 ist damit
+      # ausschließlich lokal geprüft. Ein grüner Lauf hier sagt über das
+      # Panel nichts aus.
+      - name: pytest
+        run: |
+          PYTHONPATH=. pytest tests/ -q --junitxml=ergebnis.xml
+          GESAMT=$(python - <<'PY'
+          import xml.etree.ElementTree as ET
+          w = ET.parse('ergebnis.xml').getroot()
+          s = w if w.tag == 'testsuite' else w.find('testsuite')
+          print(s.get('tests'))
+          PY
+          )
+          echo "Gesammelt und gelaufen: $GESAMT Tests"
+          if [ "$GESAMT" -lt 400 ]; then
+            echo "::error::Nur $GESAMT Tests gesammelt (erwartet >= 400)"
+            exit 1
+          fi
+          # Der dritte Ausgang, sichtbar statt nur im Kommentar: sagen,
+          # was dieser Lauf NICHT gemessen hat.
+          echo "::notice::$GESAMT Tests gelaufen. NICHT gemessen: das" \
+               "optionale Anzeigepanel (tests/test_panel.py) — es braucht" \
+               "das Paket edip320 und wird übersprungen. Das Panel ist" \
+               "nur lokal geprüft."
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.13']
+
+  javascript:
+    name: Anzeige-Rechenlogik
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+
+      # Eigener Runner statt `node --test`: der meldet bei null gefundenen
+      # Tests Exit 0 und sieht damit grün aus. `js_tests.py` kennt einen
+      # dritten Ausgang (2 = nicht gelaufen) und wertet ihn als Fehler.
+      - name: js_tests
+        run: python3 tools/js_tests.py
+
+  konfiguration:
+    name: Vorlage prüfbar
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - run: pip install paho-mqtt
+
+      # Die mitgelieferte `config.toml` muss den eigenen Prüfer bestehen.
+      # Sonst steht im Repo eine Vorlage, die beim ersten Start abbricht.
+      - name: --check-config
+        run: PYTHONPATH=. python -m s0counter.main -c config.toml --check-config
+
+  geheimnisse:
+    name: Keine Zugangsdaten im Baum
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Dasselbe Muster, das die README vor jedem Commit von Hand verlangt.
+      # Kein Treffer ist hier der Erfolgsfall.
+      #
+      # Das Muster steht in einer Variablen und wird zusammengesetzt, damit
+      # es nicht als Zeichenkette in dieser Datei steht: sonst findet der
+      # Lauf sein eigenes Prüfmuster und meldet die Regel als Verstoß.
+      # Eine Ausnahme nach Pfadname (`--exclude .github/*`) wäre die
+      # schlechtere Lösung — die stellt jede künftige Datei dort frei,
+      # auch eine, die wirklich ein Token trägt.
+      #
+      # Gezählt werden die geprüften Dateien, nicht nur die Treffer: null
+      # geprüfte Dateien wären trivial sauber und damit falsch grün.
+      - name: Token-Muster suchen
+        run: |
+          MUSTER="eyJ""hbGci|Bear""er [A-Za-z0-9]{20}"
+          GEPRUEFT=$(git ls-files | wc -l)
+          if [ "$GEPRUEFT" -lt 1 ]; then
+            echo "::error::Keine Dateien geprüft — der Lauf misst nichts"
+            exit 1
+          fi
+          if git ls-files -z | xargs -0 grep -EnI "$MUSTER" ; then
+            echo "::error::Zugangsdaten im Arbeitsbaum gefunden"
+            exit 1
+          fi
+          echo "$GEPRUEFT Dateien geprüft, keine Token-Muster gefunden."
